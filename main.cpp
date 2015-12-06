@@ -10,7 +10,7 @@ using namespace std;
 
 int main()
 {
-    ruleset rules = ruleset_smooth_life_l_test();
+    ruleset rules = ruleset_smooth_life_l();
     simulator s(rules);
     s.initialize();
 

@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.0)
-project(smoothlife)
+project(ae_smoothlife)
 
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${smoothlife_SOURCE_DIR}/cmake")
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${ae_smoothlife_SOURCE_DIR}/cmake")
 
 set(CMAKE_CXX_FLAGS "-std=c++1y -pedantic -march=native -Wall -Werror -fopenmp -ftree-vectorize -ftree-vectorizer-verbose=5")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")

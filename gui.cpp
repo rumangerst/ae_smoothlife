@@ -24,7 +24,7 @@ void gui::run()
 
     // Load the window
 
-    window = SDL_CreateWindow("Smooth Life", 100, 100, 640, 480, SDL_WINDOW_SHOWN);
+    window = SDL_CreateWindow("Smooth Life", 100, 100, 640, 480, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
 
     if (window == nullptr)
     {
@@ -34,7 +34,7 @@ void gui::run()
 
     // Create the renderer
 
-    renderer = SDL_CreateRenderer(window,-1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+    renderer = SDL_CreateRenderer(window,-1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC );
 
     if(renderer == nullptr)
     {
@@ -60,11 +60,15 @@ void gui::run()
         }
 
         //Render the scene
+        update_scale();
         if(!render())
         {
             quit = true;
         }
     }
+
+    if(sim != nullptr)
+        sim->running = false;
 }
 
 bool gui::render()
@@ -85,11 +89,17 @@ bool gui::render()
             a = (int)ceil(f * 255);
 
             //filledCircleRGBA(renderer,(int)(x * scale),(int)(y * scale),(int)(scale * 0.5),a,a,a,255);
-            roundedBoxRGBA(renderer, (int)(x * scale), (int)(y * scale), (int)(x*scale + scale), (int)(y * scale + scale),(int)(scale), a,a,a,255);
 
+            if(scale > 1)
+            {
+                roundedBoxRGBA(renderer, (int)(x * scale), (int)(y * scale), (int)(x*scale + scale), (int)(y * scale + scale),(int)(scale), a,a,a,255);
+            }
+            else
+            {
 
-            /*SDL_SetRenderDrawColor(renderer, a,a,a,255);
-            SDL_RenderDrawPoint(renderer, (int)(x * scale), (int)(y * scale));*/
+                SDL_SetRenderDrawColor(renderer, a,a,a,255);
+                SDL_RenderDrawPoint(renderer, (int)(x * scale), (int)(y * scale));
+            }
         }
     }
 
@@ -97,5 +107,16 @@ bool gui::render()
     SDL_RenderPresent(renderer);
 
     return true;
+}
+
+void gui::update_scale()
+{
+    if(sim != nullptr)
+    {
+        int w,h;
+        SDL_GetWindowSize(window,&w,&h);
+
+        scale = fmax(1, fmin( (double)w / sim->field_size_x, (double)h / sim->field_size_y ));
+    }
 }
 

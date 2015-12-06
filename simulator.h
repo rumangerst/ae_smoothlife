@@ -8,7 +8,7 @@
 
 using namespace std;
 
-#define FIELD_SIZE 256
+#define FIELD_SIZE 128
 
 class simulator
 {
@@ -154,10 +154,10 @@ private:
 
     inline double sigma1(cdouble x,cdouble a, cdouble alpha)
     {
-        return 1.0 / ( 1 + exp(-(x-a)*4.0/alpha));
+        return 1.0 / ( 1.0 + exp(-(x-a)*4.0/alpha));
     }
 
-    inline double sigma2(cdouble x,cdouble a,cdouble b, cdouble alpha)
+    /*inline double sigma2(cdouble x,cdouble a,cdouble b, cdouble alpha)
     {
         return sigma1(x,a,alpha) * ( 1.0 - sigma1(x,b,alpha));
     }
@@ -165,6 +165,17 @@ private:
     inline double sigmam(cdouble x,cdouble y,cdouble m, cdouble alpha)
     {
         return x * ( 1.0 - sigma1(m,0.5, alpha)) + y*sigma1(m, 0.5, alpha);
+    }*/
+
+    //Corrected rules according to ref. implementation
+    inline double sigma2(cdouble x,cdouble a,cdouble b)
+    {
+        return sigma1(x,a,rules.alpha_n) * ( 1.0 - sigma1(x,b,rules.alpha_n));
+    }
+
+    inline double sigmam(cdouble x,cdouble y,cdouble m)
+    {
+        return x * ( 1.0 - sigma1(m,0.5,rules.alpha_m)) + y*sigma1(m, 0.5, rules.alpha_m);
     }
 
     /**
@@ -175,7 +186,9 @@ private:
      */
     inline double s(cdouble n, cdouble m)
     {
-        return sigma2(n, sigmam(rules.b1,rules.d1,m, rules.alpha_m),sigmam(rules.b2,rules.d2,m, rules.alpha_m), rules.alpha_n);
+        //According to ref. implementation
+        return sigmam(sigma2(n,rules.b1,rules.b2),sigma2(n,rules.d1,rules.d2),m);
+        //return sigma2(n, sigmam(rules.b1,rules.d1,m),sigmam(rules.b2,rules.d2,m));
     }
 
     inline double ss(cdouble n, cdouble m)

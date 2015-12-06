@@ -32,6 +32,8 @@ private:
         cerr << "SDL error | " << msg << ": " << SDL_GetError() << endl;
     }
 
+    void update_scale();
+
     bool render();
 };
 
