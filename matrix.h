@@ -46,9 +46,10 @@ inline int calculate_ld(int size)
 /**
  * @brief A matrix with row first approach
  */
+template <typename T>
 struct matrix
 {
-    vector<double> M;
+    vector<T> M;
     int rows;
     int columns;
     int ld;
@@ -60,16 +61,27 @@ struct matrix
         ld = 0;
     }
 
-    matrix(double rows, double columns, int ld)
+    matrix(int rows, int columns)
     {
-        this->M = vector<double>(ld * rows);
+        int ld = calculate_ld(columns);
+
+        this->M = vector<T>(ld * rows);
         this->rows = rows;
         this->columns = columns;
+        this->ld = ld;
+    }
+
+    matrix(int rows, int columns, int ld)
+    {
+        this->M = vector<T>(ld * rows);
+        this->rows = rows;
+        this->columns = columns;
+        this->ld = ld;
     }
 
     matrix(const matrix & copy)
     {
-        M = vector<double>(copy.M);
+        M = vector<T>(copy.M);
         rows = copy.rows;
         columns = copy.columns;
         ld = copy.ld;
@@ -88,73 +100,42 @@ struct matrix
 
         return out;
     }
-};
 
-struct mask : public matrix
-{
-    double normalizer;
-    int size;
-
-    mask()
+    void set_circle(cint x, cint y, cint r, const T v)
     {
-
-    }
-
-    mask(cint s) : matrix(s,s,calculate_ld(s))
-    {
-        normalizer = 0;
-        size = s;
-
-        cint r_squared = (s / 2) * (s / 2);
-
-        for(int x = 0; x < s; ++x)
+        for(int i = 0; i < columns; ++i)
         {
-            cint x2 = x - s / 2;
-
-            for(int y = 0; y < s; ++y)
+            for(int j = 0; j < rows; ++j)
             {
-                cint y2 = y - s / 2;
-
-
-                if(x2*x2 + y2*y2 <= r_squared)
+                if( (i-x)*(i-x) + (j-y)*(j-y) <= r*r)
                 {
-                    M[matrix_index(x,y,s)] = 1.0;
-                    ++normalizer;
+                    M[matrix_index(i,j,ld)] = v;
                 }
             }
         }
     }
 
-    mask(const mask & copy) : matrix(copy)
+    void set_circle(cint r, const T v)
     {
-        size = copy.size;
-        normalizer = copy.normalizer;
+        set_circle(columns / 2, rows / 2, r, v);
     }
 
-    mask operator - (const mask & m) const
+    /**
+     * @brief sum Calculates the sum of values
+     * @return
+     */
+    double sum()
     {
-        if(size < m.size)
+        double s = 0;
+
+        for(int i = 0; i < columns; ++i)
         {
-            cout << "Invalid arguments for mask operator -" << endl;
-            exit(-1);
-        }
-
-        mask o(*this);
-        o.normalizer = normalizer - m.normalizer;
-
-        const int pos_begin = size / 2 - m.size / 2;
-        const int pos_end = size / 2 + m.size / 2 + 1;
-
-        for(int x =  pos_begin; x < pos_end ; ++x)
-        {
-            for(int y = pos_begin; y < pos_end; ++y)
+            for(int j = 0; j < rows; ++j)
             {
-                o.M[matrix_index(x,y,size)] -= m.M[matrix_index(x - pos_begin, y - pos_begin, m.size)];
+                s += M[matrix_index(i,j,ld)];
             }
         }
 
-        return o;
+        return s;
     }
-
-
 };

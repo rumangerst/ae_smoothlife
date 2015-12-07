@@ -9,7 +9,7 @@ set(CMAKE_CXX_FLAGS_DEBUG "-O0 -g")
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O3 -DNDEBUG -g")
 set(CMAKE_CXX_FLAGS_MINSIZEREL "-Os -DNDEBUG")
 
-set(SOURCES main.cpp simulator.cpp gui.cpp matrix.cpp ruleset.cpp)
+set(SOURCES main.cpp simulator.cpp gui.cpp matrix.h ruleset.h gui_space_renderer.h space_renderer_grayscale.h space_renderer_microscope.h gui_color.h)
 
 find_package(SDL2 REQUIRED)
 find_package(SDL2_gfx REQUIRED)

@@ -3,6 +3,7 @@
 #include <math.h>
 #include <vector>
 #include <random>
+#include <atomic>
 #include "matrix.h"
 #include "ruleset.h"
 
@@ -14,23 +15,32 @@ class simulator
 {
 public:
     simulator(const ruleset & rules);
+    ~simulator();
 
     const int field_size_x = FIELD_SIZE;
     const int field_size_y = FIELD_SIZE;
     const int field_ld = FIELD_SIZE;
 
     const ruleset rules;
+    atomic<matrix<double>*> space_current_atomic;
 
-    matrix field;
-    mask m_mask;
-    mask n_mask;
+    ulong time = 0;
 
+    matrix<double> m_mask;
+    matrix<double> n_mask;
+    double m_mask_sum;
+    double n_mask_sum;
+
+    bool initialized = false;
     bool running = false;
 
     void initialize();
     void simulate();
 
 private:
+
+    matrix<double>* space_current;
+    matrix<double>* space_next;
 
     void initialize_field_1()
     {
@@ -39,7 +49,7 @@ private:
         {
             for(int y = 0; y < field_size_y; ++y)
             {
-                field.M[matrix_index(x,y,field_ld)] = 1;
+                space_current->M[matrix_index(x,y,field_ld)] = 1;
             }
         }
     }
@@ -54,7 +64,7 @@ private:
         {
             for(int y = 0; y < field_size_y; ++y)
             {
-                field.M[matrix_index(x,y,field_ld)] = random_state(re);
+                space_current->M[matrix_index(x,y,field_ld)] = random_state(re);
             }
         }
     }
@@ -101,7 +111,7 @@ private:
                         while (py>=field_size_y) py-=field_size_y;
                         if (px>=0 && px<field_size_x && py>=0 && py<field_size_y)
                         {
-                            field.M[matrix_index(px,py,field_ld)] = 1.0;
+                            space_current->M[matrix_index(px,py,field_ld)] = 1.0;
                         }
                     }
                 }
@@ -123,7 +133,7 @@ private:
         {
             for(int y = 0; y < field_size_y; ++y)
             {
-                field.M[matrix_index(x,y,field_ld)] = random_state(re) <= p_seed ? 1 : 0;
+                space_current->M[matrix_index(x,y,field_ld)] = random_state(re) <= p_seed ? 1 : 0;
             }
         }
 
@@ -134,18 +144,18 @@ private:
             {
                 for(int y = 0; y < field_size_y; ++y)
                 {
-                    double f = field.M[matrix_index(x,y,field_ld)];
+                    double f = space_current->M[matrix_index(x,y,field_ld)];
 
                     if(f > 0.5)
                     {
                         if(random_state(re) <= p_proagate)
-                            field.M[matrix_index_wrapped(x - 1,y,field_size_x, field_size_y,field_ld)] = 1;
+                            space_current->M[matrix_index_wrapped(x - 1,y,field_size_x, field_size_y,field_ld)] = 1;
                         if(random_state(re) <= p_proagate)
-                            field.M[matrix_index_wrapped(x + 1,y,field_size_x, field_size_y,field_ld)] = 1;
+                            space_current->M[matrix_index_wrapped(x + 1,y,field_size_x, field_size_y,field_ld)] = 1;
                         if(random_state(re) <= p_proagate)
-                            field.M[matrix_index_wrapped(x,y - 1,field_size_x, field_size_y,field_ld)] = 1;
+                            space_current->M[matrix_index_wrapped(x,y - 1,field_size_x, field_size_y,field_ld)] = 1;
                         if(random_state(re) <= p_proagate)
-                            field.M[matrix_index_wrapped(x,y + 1,field_size_x, field_size_y,field_ld)] = 1;
+                            space_current->M[matrix_index_wrapped(x,y + 1,field_size_x, field_size_y,field_ld)] = 1;
                     }
                 }
             }
@@ -198,10 +208,10 @@ private:
 
     inline double f(cint x, cint y, cdouble n, cdouble m)
     {
-        cdouble v = field.M[matrix_index(x,y, field_ld)];
+        cdouble v = space_current->M[matrix_index(x,y, field_ld)];
 
         return v + rules.dt * ss(n,m);
     }
 
-    double filling(const matrix & field, cint x, cint y, const mask & m);
+    double filling(cint x, cint y, const matrix<double> & m, cdouble m_sum);
 };

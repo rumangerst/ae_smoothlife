@@ -6,6 +6,8 @@ gui::gui()
 
 gui::~gui()
 {
+    delete space_renderer;
+
     if(renderer != nullptr)
         SDL_DestroyRenderer(renderer);
     if(window != nullptr)
@@ -61,52 +63,11 @@ void gui::run()
 
         //Render the scene
         update_scale();
-        if(!render())
-        {
-            quit = true;
-        }
+        space_renderer->render(sim->space_current_atomic.load(),renderer,scale);
     }
 
     if(sim != nullptr)
         sim->running = false;
-}
-
-bool gui::render()
-{
-    SDL_SetRenderDrawColor(renderer, 0,0,0,255);
-    SDL_RenderClear(renderer);
-
-    //filledCircleRGBA(renderer,200,200,(int)3,255,255,255,255);
-
-    for(int x = 0; x < sim->field_size_x;++x)
-    {
-        for(int y = 0; y < sim->field_size_y;++y)
-        {
-            Uint8 a = 0;
-
-            const double f = sim->field.M[matrix_index(x,y,sim->field_ld)];
-
-            a = (int)ceil(f * 255);
-
-            //filledCircleRGBA(renderer,(int)(x * scale),(int)(y * scale),(int)(scale * 0.5),a,a,a,255);
-
-            if(scale > 1)
-            {
-                roundedBoxRGBA(renderer, (int)(x * scale), (int)(y * scale), (int)(x*scale + scale), (int)(y * scale + scale),(int)(scale), a,a,a,255);
-            }
-            else
-            {
-
-                SDL_SetRenderDrawColor(renderer, a,a,a,255);
-                SDL_RenderDrawPoint(renderer, (int)(x * scale), (int)(y * scale));
-            }
-        }
-    }
-
-
-    SDL_RenderPresent(renderer);
-
-    return true;
 }
 
 void gui::update_scale()

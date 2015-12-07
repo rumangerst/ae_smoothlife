@@ -41,8 +41,8 @@ class ruleset_smooth_life_l : public ruleset
 public:
     ruleset_smooth_life_l()
     {
-         ra = 20;
-         ri = 6;
+         ra = 10;
+         ri = 10.0 / 3.0;
          b1 = 0.257;
          b2 = 0.336;
          d1 = 0.365;
