@@ -50,7 +50,7 @@ public:
          alpha_m = 0.147;
          alpha_n = 0.028;
          discrete = false;
-         dt = 0.05;
+         dt = 0.1;
     }
 };
 

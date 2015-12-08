@@ -32,10 +32,10 @@ void simulator::initialize()
     m_mask_sum = m_mask.sum();
     n_mask_sum = n_mask.sum();
 
-    initialize_field_propagate();
+    //initialize_field_propagate();
     //initialize_field_random();
     //initialize_field_1();
-    //initialize_field_splat();
+    initialize_field_splat();
 
     initialized = true;
 }

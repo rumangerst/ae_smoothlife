@@ -107,7 +107,7 @@ struct space_renderer_microscope : public gui_space_renderer
             {
                 const double f = space->M[matrix_index_wrapped(i,j,space->columns,space->rows,space->ld)];
 
-                if(f >= 0.95)
+                if(f >= 0.92)
                     fill += f;
             }
         }
@@ -127,7 +127,7 @@ struct space_renderer_microscope : public gui_space_renderer
             for(int y = 0; y < space->rows;++y)
             {
                 const double f = space->M[matrix_index(x,y,space->ld)];
-                const color clr = f < 0.95 ? lerp_color_n(color_def, f) : lerp_color_n(color_def_green, filling(space,x,y));
+                const color clr = f < 0.92 ? lerp_color_n(color_def, f) : lerp_color_n(color_def_green, filling(space,x,y));
 
                 render_circle(x * scale,y * scale, scale, clr, renderer);
                 //render_pixel(renderer,x,y,clr);
