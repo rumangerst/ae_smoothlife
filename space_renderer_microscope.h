@@ -115,14 +115,35 @@ struct space_renderer_microscope : public gui_space_renderer
         return fill / 25.0;
     }
 
-    void render(matrix<double> * space, SDL_Renderer * renderer, double scale)
+    void render(matrix<double> * space, SDL_Renderer * renderer, cint w, cint h)
     {
 
         SDL_SetRenderDrawColor(renderer, bytecolor(clr_neutral.r),bytecolor(clr_neutral.g),bytecolor(clr_neutral.b),255);
         SDL_RenderClear(renderer);
 
+        cdouble sf_x = (double)w / space->columns;
+        cdouble sf_y = (double)h / space->rows;
 
-        for(int x = 0; x < space->columns;++x)
+        //cout << w << "," << h << endl;
+        //cout << sf_x << "," <<sf_y << endl;
+
+        for(int x = 0; x < w; ++x)
+        {
+            for(int y = 0; y < h; ++y)
+            {
+                //cout << x /sf_x << ", " << y / sf_y << endl;
+
+                const double f = space->M[matrix_index(x / sf_x,y / sf_y,space->ld)];
+
+                const color clr = f < 0.92 ? lerp_color_n(color_def, f) : lerp_color_n(color_def_green, filling(space,x / sf_x,y / sf_y));
+
+                //render_circle(x * scale,y * scale, scale, clr, renderer);
+                render_pixel(renderer,x,y,clr);
+            }
+        }
+
+
+        /*for(int x = 0; x < space->columns;++x)
         {
             for(int y = 0; y < space->rows;++y)
             {
@@ -132,7 +153,7 @@ struct space_renderer_microscope : public gui_space_renderer
                 render_circle(x * scale,y * scale, scale, clr, renderer);
                 //render_pixel(renderer,x,y,clr);
             }
-        }
+        }*/
 
         SDL_RenderPresent(renderer);
     }

@@ -44,7 +44,7 @@ void simulator::simulate()
 {
     cout << "Running ..." << endl;
 
-    running = true;
+    running = ENABLE_SIMULATION;
 
     while(running)
     {
@@ -72,7 +72,7 @@ void simulator::simulate()
     }
 
     //Test the colors
-    for(int x = 0; x < field_size_x; ++x)
+    /*for(int x = 0; x < field_size_x; ++x)
     {
         for(int y = 0; y < field_size_y; ++y)
         {
@@ -82,7 +82,7 @@ void simulator::simulate()
             double &  value = space_current->M[matrix_index(x,y,field_ld)];
             value = (n + m) / 2.0;
         }
-    }
+    }*/
 
     //Test to print s(n,m)
     /*for(int x = 0; x < field_size_x; ++x)

@@ -30,17 +30,12 @@ private:
     bool error_occurred = false;
     SDL_Window* window = nullptr;
     SDL_Renderer* renderer = nullptr;
-    gui_space_renderer * space_renderer = new space_renderer_microscope();
+    gui_space_renderer * space_renderer = new space_renderer_grayscale();
 
 
     void print_sdl_error(const char * msg)
     {
         cerr << "SDL error | " << msg << ": " << SDL_GetError() << endl;
     }
-
-    void update_scale();
-
-    bool render_grayscale();
-    bool render_microscope();
 };
 

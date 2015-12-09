@@ -4,6 +4,7 @@
 #include <memory>
 #include "simulator.h"
 #include "gui.h"
+#include "ogl_gui.h"
 
 using namespace std;
 
@@ -14,7 +15,8 @@ int main()
     simulator s(rules);
     s.initialize();
 
-    gui g;
+    //gui g;
+    ogl_gui g;
     g.sim = shared_ptr<simulator>(&s);
 
     #pragma omp parallel
@@ -29,7 +31,8 @@ int main()
     //s.simulate();
 
 
-
+    /*ogl_gui g;
+    g.run();*/
 
     return 0;
 }

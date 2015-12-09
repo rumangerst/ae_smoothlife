@@ -11,5 +11,5 @@ struct gui_space_renderer
     }
 
     virtual ~gui_space_renderer() {}
-    virtual void render(matrix<double> * space, SDL_Renderer * renderer, double scale) = 0;
+    virtual void render(matrix<double> * space, SDL_Renderer * renderer, cint w, cint h) = 0;
 };

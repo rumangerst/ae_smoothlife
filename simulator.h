@@ -10,6 +10,7 @@
 using namespace std;
 
 #define FIELD_SIZE 128
+#define ENABLE_SIMULATION true
 
 class simulator
 {

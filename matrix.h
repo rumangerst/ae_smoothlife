@@ -79,7 +79,7 @@ struct matrix
         this->ld = ld;
     }
 
-    matrix(const matrix & copy)
+    matrix(const matrix<T> & copy)
     {
         M = vector<T>(copy.M);
         rows = copy.rows;
@@ -87,7 +87,7 @@ struct matrix
         ld = copy.ld;
     }
 
-    friend ostream& operator<<(ostream& out, const matrix & m )
+    friend ostream& operator<<(ostream& out, const matrix<T> & m )
     {
         for(int y = 0; y < m.columns; ++y)
         {
