@@ -28,12 +28,6 @@ int main()
         s.simulate();
     }
 
-    //s.simulate();
-
-
-    /*ogl_gui g;
-    g.run();*/
-
     return 0;
 }
 

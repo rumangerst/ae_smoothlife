@@ -38,15 +38,15 @@ inline int matrix_index_wrapped(cint x, cint y, cint w, cint h, cint ld)
  * @param size
  * @return
  */
-inline int calculate_ld(int size)
+inline int matrix_calculate_ld(int size)
 {
     return 64 * ceil(size / 64.0);
 }
 
+template <typename T>
 /**
  * @brief A matrix with row first approach
  */
-template <typename T>
 struct matrix
 {
     vector<T> M;
@@ -63,7 +63,7 @@ struct matrix
 
     matrix(int rows, int columns)
     {
-        int ld = calculate_ld(columns);
+        int ld = matrix_calculate_ld(columns);
 
         this->M = vector<T>(ld * rows);
         this->rows = rows;

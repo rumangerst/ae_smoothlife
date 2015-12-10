@@ -25,11 +25,7 @@ bool ogl_shader::bind()
     }
 
     // Bind shader attributes and uniforms
-    shader_uniform_location("texture0", uniform_texture0);
-    shader_uniform_location("render_w", uniform_render_w);
-    shader_uniform_location("render_h", uniform_render_h);
-    shader_uniform_location("field_w", uniform_field_w);
-    shader_uniform_location("field_h", uniform_field_h);
+    bind_variables();
 
     return true;
 }
@@ -37,6 +33,8 @@ bool ogl_shader::bind()
 void ogl_shader::unbind()
 {
     glUseProgram(0);
+
+    unbind_variables();
 }
 
 void ogl_shader::print_shader_log(GLuint shader)
@@ -169,40 +167,23 @@ bool ogl_shader::load_program(const char *vertex_shader_code, const char *pixel_
     return true;
 }
 
-bool ogl_shader::shader_uniform_location(const char *name, GLint &location)
+void ogl_shader::bind_variables()
 {
-    location = glGetUniformLocation(program_id, name);
-
-    if(location == -1)
-    {
-        cerr << "Cannot get location of shader variable " << name << endl;
-        return false;
-    }
-
-    return true;
+    uniform_texture0.bind(program_id);
+    uniform_field_w.bind(program_id);
+    uniform_field_h.bind(program_id);
+    uniform_render_w.bind(program_id);
+    uniform_render_h.bind(program_id);
+    uniform_time.bind(program_id);
 }
 
-void ogl_shader::set_uniform_texture0(GLuint unit)
+void ogl_shader::unbind_variables()
 {
-    glUniform1i(uniform_texture0, unit);
+    uniform_texture0.unbind();
+    uniform_field_w.unbind();
+    uniform_field_h.unbind();
+    uniform_render_w.unbind();
+    uniform_render_h.unbind();
+    uniform_time.unbind();
 }
 
-void ogl_shader::set_uniform_render_w(float w)
-{
-    glUniform1f(uniform_render_w, w);
-}
-
-void ogl_shader::set_uniform_render_h(float h)
-{
-    glUniform1f(uniform_render_h, h);
-}
-
-void ogl_shader::set_uniform_field_w(float w)
-{
-    glUniform1f(uniform_field_w, w);
-}
-
-void ogl_shader::set_uniform_field_h(float h)
-{
-    glUniform1f(uniform_field_h, h);
-}

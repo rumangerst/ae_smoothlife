@@ -1,5 +1,8 @@
 #pragma once
 
+/**
+ * @brief Contains the rules used for simulation
+ */
 class ruleset
 {
 public:
@@ -36,6 +39,9 @@ protected:
 
 };
 
+/**
+ * @brief Smooth Life L ruleset
+ */
 class ruleset_smooth_life_l : public ruleset
 {
 public:
@@ -54,24 +60,9 @@ public:
     }
 };
 
-class ruleset_smooth_life_l_test : public ruleset
-{
-public:
-    ruleset_smooth_life_l_test()
-    {
-         ra = 10;
-         ri = 10.0 / 3.0;
-         b1 = 0.257;
-         b2 = 0.336;
-         d1 = 0.365;
-         d2 = 0.549;
-         alpha_m = 0.147;
-         alpha_n = 0.028;
-         discrete = false;
-         dt = 0.1;
-    }
-};
-
+/**
+ * @brief Ruleset suggested in paper by S. Rafler
+ */
 class ruleset_rafler_paper : public ruleset
 {
 public:
@@ -85,7 +76,7 @@ public:
         b2 = 0.365;
         d1 = 0.267;
         d2 = 0.445;
-        discrete = true;
-        dt =1;
+        discrete = false;
+        dt =0.1;
     }
 };

@@ -157,12 +157,15 @@ void ogl_gui::render()
         glBindTexture(GL_TEXTURE_2D, space_texture.get_texture_id());
 
         //Tell shader the target size
-        shaders[current_shader]->set_uniform_render_w(sw);
-        shaders[current_shader]->set_uniform_render_h(sh);
+        shaders[current_shader]->uniform_render_w.set(sw);
+        shaders[current_shader]->uniform_render_h.set(sh);
 
         //Tell field size
-        shaders[current_shader]->set_uniform_field_w(w);
-        shaders[current_shader]->set_uniform_field_h(h);
+        shaders[current_shader]->uniform_field_w.set(w);
+        shaders[current_shader]->uniform_field_h.set(h);
+
+        // Tell shader other information
+        shaders[current_shader]->uniform_time.set(SDL_GetTicks());
 
         glTranslatef( sdl_window_w / 2.0 - sw / 2.0, sdl_window_h / 2.0 - sh / 2.0, 0.0 );
 
@@ -226,7 +229,7 @@ bool ogl_gui::load_shaders()
     //todo make nicer
     current_shader = 0;
     shader->bind();
-    shader->set_uniform_texture0(0);
+    shader->uniform_texture0.set(0);
 
     return true;
 }

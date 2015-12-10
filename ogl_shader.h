@@ -1,12 +1,18 @@
 #pragma once
 
 #include <iostream>
+#include <string>
 #include <GL/glew.h>
 #include <GL/gl.h>
 #include <GL/glu.h>
+#include "ogl_shader_variable.h"
 
 using namespace std;
 
+/**
+ * @brief Encapsulates an OpenGL shader program (pixel and vertex shader)
+ * @author Ruman
+ */
 class ogl_shader
 {
 public:
@@ -25,24 +31,20 @@ public:
         return program_id;
     }
 
-    void set_uniform_texture0(GLuint unit);
-    void set_uniform_render_w(float w);
-    void set_uniform_render_h(float h);
-    void set_uniform_field_w(float w);
-    void set_uniform_field_h(float h);
+    shader_uniform_variable_texture_unit uniform_texture0 = shader_uniform_variable_texture_unit("texture0");
+    shader_uniform_variable_1f uniform_render_w = shader_uniform_variable_1f("render_w");
+    shader_uniform_variable_1f uniform_render_h = shader_uniform_variable_1f("render_h");
+    shader_uniform_variable_1f uniform_field_w = shader_uniform_variable_1f("field_w");
+    shader_uniform_variable_1f uniform_field_h = shader_uniform_variable_1f("field_h");
+    shader_uniform_variable_1f uniform_time = shader_uniform_variable_1f("time");
+
 
 private:
 
     GLuint program_id = 0;
 
-    // Shader variable locations
-    GLint uniform_texture0;
-    GLint uniform_render_w;
-    GLint uniform_render_h;
-    GLint uniform_field_w;
-    GLint uniform_field_h;
-
-    bool shader_uniform_location(const char * name, GLint & location);
+    void bind_variables();
+    void unbind_variables();
 
 protected:
 
