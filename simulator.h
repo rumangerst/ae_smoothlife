@@ -11,6 +11,8 @@ using namespace std;
 
 #define FIELD_SIZE 128
 #define ENABLE_SIMULATION true
+#define INITIALIZE_FIELD true
+
 
 /**
  * @brief Encapsulates the calculation of states

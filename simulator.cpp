@@ -35,7 +35,8 @@ void simulator::initialize()
     //initialize_field_propagate();
     //initialize_field_random();
     //initialize_field_1();
-    initialize_field_splat();
+    if(INITIALIZE_FIELD)
+     initialize_field_splat();
 
     initialized = true;
 }
@@ -70,6 +71,24 @@ void simulator::simulate()
 
         ++time;
     }
+
+    //Print the two masks
+    /*for(int x = 0; x < m_mask.columns; ++x)
+    {
+        for(int y = 0; y < m_mask.rows; ++y)
+        {
+            space_current->M[matrix_index(x,y,space_current->ld)] = m_mask.M[matrix_index(x,y,m_mask.ld)];
+        }
+    }
+    for(int x = 0; x < n_mask.columns; ++x)
+    {
+        for(int y = 0; y < n_mask.rows; ++y)
+        {
+            space_current->M[matrix_index(x + m_mask.columns + 10,y + m_mask.rows + 10,space_current->ld)] = n_mask.M[matrix_index(x,y,n_mask.ld)];
+        }
+    }
+     space_current_atomic.store(space_current);*/
+
 
     //Test the colors
     /*for(int x = 0; x < field_size_x; ++x)

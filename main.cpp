@@ -8,6 +8,8 @@
 
 using namespace std;
 
+#define SDL_GUI false
+
 
 int main()
 {    
@@ -15,8 +17,11 @@ int main()
     simulator s(rules);
     s.initialize();
 
-    //gui g;
+#if SDL_GUI == true
+    gui g;
+#else
     ogl_gui g;
+#endif
     g.simulator_status = &s.running;
     g.space = &s.space_current_atomic;
 

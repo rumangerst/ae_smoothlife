@@ -107,10 +107,25 @@ struct matrix
         {
             for(int j = 0; j < rows; ++j)
             {
-                if( (i-x)*(i-x) + (j-y)*(j-y) <= r*r)
+                cdouble d = sqrt((i-x)*(i-x) + (j-y)*(j-y));
+
+                if(d <= r)
                 {
                     M[matrix_index(i,j,ld)] = v;
                 }
+
+                /*if(d <= r)
+                {
+                    // The point is in radius. No further actions needed
+                    M[matrix_index(i,j,ld)] = v;
+                }
+                else if( floor(d) <= r)
+                {
+                    //Distance between next point in circle and the point outside circle
+                    cdouble d_tf = d - floor(d);
+
+                    M[matrix_index(i,j,ld)] = v * (1.0 - d_tf); //Works.
+                }*/
             }
         }
     }

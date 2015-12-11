@@ -48,7 +48,7 @@ public:
     ruleset_smooth_life_l()
     {
          ra = 10;
-         ri = 10.0 / 3.0;
+         ri = 3;
          b1 = 0.257;
          b2 = 0.336;
          d1 = 0.365;
