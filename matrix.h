@@ -107,12 +107,19 @@ struct matrix
         {
             for(int j = 0; j < rows; ++j)
             {
-                cdouble d = sqrt((i-x)*(i-x) + (j-y)*(j-y));
+                cdouble s_sq = (i-x)*(i-x) + (j-y)*(j-y);
+
+                if(s_sq <= r*r)
+                {
+                    M[matrix_index(i,j,ld)] = v;
+                }
+
+                /*cdouble d = sqrt((i-x)*(i-x) + (j-y)*(j-y));
 
                 if(d <= r)
                 {
                     M[matrix_index(i,j,ld)] = v;
-                }
+                }*/
 
                 /*if(d <= r)
                 {
