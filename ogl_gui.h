@@ -6,6 +6,7 @@
 #include <GL/glu.h>
 #include <iostream>
 #include <vector>
+#include <atomic>
 #include <memory>
 #include "simulator.h"
 #include "ogl_shader.h"
@@ -16,7 +17,8 @@ using namespace std;
 class ogl_gui
 {
 public:
-     shared_ptr<simulator> sim = nullptr;
+     atomic<matrix<double> *>* space = nullptr;
+     bool * simulator_status = nullptr;
 
     ogl_gui();
     ~ogl_gui();
@@ -33,7 +35,7 @@ private:
 
 
     vector<ogl_shader *> shaders;
-    int current_shader = 0;
+    int current_shader = -1;
 
     ogl_texture space_texture;
 
@@ -72,5 +74,10 @@ private:
             return true;
         }
     }
+
+    void switch_shader(int shader_index);
+    void switch_shader();
+
+    void handle_events(SDL_Event e);
 
 };

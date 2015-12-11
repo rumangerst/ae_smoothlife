@@ -17,7 +17,8 @@ int main()
 
     //gui g;
     ogl_gui g;
-    g.sim = shared_ptr<simulator>(&s);
+    g.simulator_status = &s.running;
+    g.space = &s.space_current_atomic;
 
     #pragma omp parallel
     {

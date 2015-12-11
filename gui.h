@@ -17,12 +17,14 @@ class gui
 {
 public:
 
-    shared_ptr<simulator> sim = nullptr;
+    atomic<matrix<double> *>* space = nullptr;
+    bool * simulator_status = nullptr;
 
     gui();
     ~gui();
 
     void run();
+    void free();
 private:
 
     bool error_occurred = false;

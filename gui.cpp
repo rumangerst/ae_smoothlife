@@ -6,6 +6,11 @@ gui::gui()
 
 gui::~gui()
 {
+    free();
+}
+
+void gui::free()
+{
     if(renderer != nullptr)
         SDL_DestroyRenderer(renderer);
     if(window != nullptr)
@@ -53,8 +58,8 @@ void gui::run()
         {
             if (e.type == SDL_QUIT)
             {
-                if(sim != nullptr)
-                    sim->running = false;
+                if(simulator_status != nullptr)
+                    *simulator_status = false;
                 quit = true;
             }
         }
@@ -63,8 +68,8 @@ void gui::run()
         render();
     }
 
-    if(sim != nullptr)
-        sim->running = false;
+   if(simulator_status != nullptr)
+        *simulator_status = false;
 }
 
 void gui::render()
@@ -72,11 +77,11 @@ void gui::render()
     SDL_SetRenderDrawColor(renderer, 0,0,0,255);
     SDL_RenderClear(renderer);
 
-    for(int x = 0; x < sim->field_size_x; ++x)
+    for(int x = 0; x < space->load()->columns; ++x)
     {
-        for(int y = 0; y < sim->field_size_y; ++y)
+        for(int y = 0; y < space->load()->rows; ++y)
         {
-            const double f = sim->space_current_atomic.load()->M[matrix_index(x,y,sim->field_ld)];
+            const double f = space->load()->M[matrix_index(x,y,space->load()->ld)];
 
             Uint8 a = (int)ceil(f * 255);
 

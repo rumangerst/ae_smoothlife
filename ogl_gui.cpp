@@ -25,9 +25,13 @@ void ogl_gui::run()
             {
                 if (e.type == SDL_QUIT)
                 {
-                    if(sim != nullptr)
-                        sim->running = false;
+                    if(simulator_status != nullptr)
+                        *simulator_status = false;
                     quit = true;
+                }
+                else
+                {
+                    handle_events(e);
                 }
             }
 
@@ -38,8 +42,8 @@ void ogl_gui::run()
         }
     }
 
-    if(sim != nullptr)
-        sim->running = false;
+    if(simulator_status != nullptr)
+        *simulator_status = false;
 }
 
 bool ogl_gui::init()
@@ -88,7 +92,7 @@ bool ogl_gui::load()
         return false;
 
     // load texture
-    space_texture.loadFromMatrix(sim->space_current_atomic.load());
+    space_texture.loadFromMatrix(space->load());
 
     return true;
 }
@@ -142,48 +146,45 @@ void ogl_gui::render()
 
     glLoadIdentity();
 
-    if(sim != nullptr)
-    {
-        space_texture.loadFromMatrix(sim->space_current_atomic.load());
+    space_texture.loadFromMatrix(space->load());
 
-        cdouble w = sim->field_size_x;
-        cdouble h = sim->field_size_y;
-        cdouble scale = fmin(sdl_window_w / w, sdl_window_h / h);
-        cdouble sw = scale * w;
-        cdouble sh = scale * h;
+    cdouble w = space->load()->columns;
+    cdouble h = space->load()->rows;
+    cdouble scale = fmin(sdl_window_w / w, sdl_window_h / h);
+    cdouble sw = scale * w;
+    cdouble sh = scale * h;
 
-        //Activate texture
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, space_texture.get_texture_id());
+    //Activate texture
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, space_texture.get_texture_id());
 
-        //Tell shader the target size
-        shaders[current_shader]->uniform_render_w.set(sw);
-        shaders[current_shader]->uniform_render_h.set(sh);
+    //Tell shader the target size
+    shaders[current_shader]->uniform_render_w.set(sw);
+    shaders[current_shader]->uniform_render_h.set(sh);
 
-        //Tell field size
-        shaders[current_shader]->uniform_field_w.set(w);
-        shaders[current_shader]->uniform_field_h.set(h);
+    //Tell field size
+    shaders[current_shader]->uniform_field_w.set(w);
+    shaders[current_shader]->uniform_field_h.set(h);
 
-        // Tell shader other information
-        shaders[current_shader]->uniform_time.set(SDL_GetTicks());
+    // Tell shader other information
+    shaders[current_shader]->uniform_time.set(SDL_GetTicks());
 
-        glTranslatef( sdl_window_w / 2.0 - sw / 2.0, sdl_window_h / 2.0 - sh / 2.0, 0.0 );
+    glTranslatef( sdl_window_w / 2.0 - sw / 2.0, sdl_window_h / 2.0 - sh / 2.0, 0.0 );
 
-        glBegin( GL_QUADS );
-        //glColor3f( 0.f, 1.f, 1.f );
+    glBegin( GL_QUADS );
+    //glColor3f( 0.f, 1.f, 1.f );
 
-        glTexCoord2d(0.0,0.0);
-        glVertex2f( 0, 0 );
-        glTexCoord2d(1.0,0.0);
-        glVertex2f( sw, 0 );
-        glTexCoord2d(1.0,1.0);
-        glVertex2f( sw, sh );
-        glTexCoord2d(0.0,1.0);
-        glVertex2f( 0, sh );
+    glTexCoord2d(0.0,0.0);
+    glVertex2f( 0, 0 );
+    glTexCoord2d(1.0,0.0);
+    glVertex2f( sw, 0 );
+    glTexCoord2d(1.0,1.0);
+    glVertex2f( sw, sh );
+    glTexCoord2d(0.0,1.0);
+    glVertex2f( 0, sh );
 
-        glEnd();
+    glEnd();
 
-    }
 }
 
 void ogl_gui::update_gl()
@@ -204,13 +205,29 @@ void ogl_gui::update_gl()
 
 bool ogl_gui::load_shaders()
 {
-    ogl_shader * shader = new ogl_shader();
-    /*shader->load_program(
-                "void main() { gl_Position = gl_ProjectionMatrix * gl_ModelViewMatrix * gl_Vertex; }",
-                "void main() { gl_FragColor = vec4( 1.0, 0.0, 0.0, 1.0 ); }");*/
-
-
+    // Load grayscale shader
     {
+        ogl_shader * shader = new ogl_shader("Grayscale");
+
+        const char * source_vertex =
+        #include "shaders/grayscale.vsh"
+                ;
+        const char * source_pixel =
+        #include "shaders/grayscale.fsh"
+                ;
+
+        if(!shader->load_program(source_vertex, source_pixel))
+        {
+            return false;
+        }
+
+        shaders.push_back(shader);
+    }
+
+    // Load microscope shader
+    {
+        ogl_shader * shader = new ogl_shader("Microscope");
+
         const char * source_vertex =
         #include "shaders/microscope.vsh"
                 ;
@@ -222,15 +239,48 @@ bool ogl_gui::load_shaders()
         {
             return false;
         }
+
+        shaders.push_back(shader);
     }
 
-    shaders.push_back(shader);
-
-    //todo make nicer
-    current_shader = 0;
-    shader->bind();
-    shader->uniform_texture0.set(0);
+    switch_shader();
 
     return true;
 }
 
+void ogl_gui::switch_shader(int shader_index)
+{
+    cout << "Switching to shader id" << shader_index << " (" <<shaders[shader_index]->name << ")" << endl;
+
+    if(shader_index != current_shader)
+    {
+        if(current_shader != -1)
+        {
+            shaders[current_shader]->unbind();
+        }
+
+        current_shader = shader_index;
+
+        shaders[current_shader]->bind();
+        shaders[current_shader]->uniform_texture0.set(0);
+
+    }
+}
+
+void ogl_gui::switch_shader()
+{
+    switch_shader((current_shader + 1) % shaders.size());
+}
+
+void ogl_gui::handle_events(SDL_Event e)
+{
+    if(e.type == SDL_KEYUP)
+    {
+        switch(e.key.keysym.sym)
+        {
+        case SDLK_s:
+            switch_shader();
+            break;
+        }
+    }
+}

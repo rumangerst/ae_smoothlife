@@ -16,7 +16,7 @@ using namespace std;
 class ogl_shader
 {
 public:
-    ogl_shader();
+    ogl_shader(const char * name);
     virtual ~ogl_shader();
 
     virtual void free();
@@ -31,6 +31,8 @@ public:
         return program_id;
     }
 
+    string name;
+
     shader_uniform_variable_texture_unit uniform_texture0 = shader_uniform_variable_texture_unit("texture0");
     shader_uniform_variable_1f uniform_render_w = shader_uniform_variable_1f("render_w");
     shader_uniform_variable_1f uniform_render_h = shader_uniform_variable_1f("render_h");
@@ -44,7 +46,7 @@ private:
     GLuint program_id = 0;
 
     void bind_variables();
-    void unbind_variables();
+    void unbind_variables();    
 
 protected:
 

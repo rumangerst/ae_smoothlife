@@ -1,7 +1,8 @@
 #include "ogl_shader.h"
 
-ogl_shader::ogl_shader()
+ogl_shader::ogl_shader(const char * name)
 {
+    this->name = string(name);
 }
 
 ogl_shader::~ogl_shader()
