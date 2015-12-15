@@ -9,7 +9,8 @@
 
 using namespace std;
 
-#define FIELD_SIZE 128
+#define FIELD_W 300
+#define FIELD_H 200
 #define ENABLE_SIMULATION true
 #define INITIALIZE_FIELD true
 
@@ -23,9 +24,9 @@ public:
     simulator(const ruleset & rules);
     ~simulator();
 
-    const int field_size_x = 300;
-    const int field_size_y = 200;
-    const int field_ld = 300;
+    const int field_size_x = FIELD_W;
+    const int field_size_y = FIELD_H;
+    const int field_ld = matrix_calculate_ld(FIELD_W);
 
     const ruleset rules;
     atomic<matrix<double>*> space_current_atomic;
