@@ -14,8 +14,9 @@ ogl_texture::~ogl_texture()
 
 bool ogl_texture::loadFromMatrix(matrix<double> * M)
 {
-    cint tex_w = M->columns;
-    cint tex_h = M->rows;
+    // The texture size should be power of two
+    cint tex_w = power_of_two(M->columns);
+    cint tex_h = power_of_two(M->rows);
 
     vector<GLfloat> pixels(tex_w * tex_h);
 
@@ -32,7 +33,7 @@ bool ogl_texture::loadFromMatrix(matrix<double> * M)
         }
     }
 
-    return loadFromPixel(pixels.data(), M->columns, M->rows);
+    return loadFromPixel(pixels.data(), tex_w, tex_h);
 }
 
 bool ogl_texture::loadFromPixel(GLfloat *pixels, GLuint width, GLuint height)
@@ -42,7 +43,7 @@ bool ogl_texture::loadFromPixel(GLfloat *pixels, GLuint width, GLuint height)
     free();
 
     texture_width = width;
-    texture_height = height;
+    texture_height = height;    
 
     glGenTextures(1, &texture_id);
     glBindTexture(GL_TEXTURE_2D, texture_id);

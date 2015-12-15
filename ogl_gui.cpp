@@ -153,6 +153,8 @@ void ogl_gui::render()
     cdouble scale = fmin(sdl_window_w / w, sdl_window_h / h);
     cdouble sw = scale * w;
     cdouble sh = scale * h;
+    cdouble texcoord_w = w / space_texture.get_width();
+    cdouble texcoord_h = h / space_texture.get_height();
 
     //Activate texture
     glActiveTexture(GL_TEXTURE0);
@@ -176,11 +178,11 @@ void ogl_gui::render()
 
     glTexCoord2d(0.0,0.0);
     glVertex2f( 0, 0 );
-    glTexCoord2d(1.0,0.0);
+    glTexCoord2d(texcoord_w,0.0);
     glVertex2f( sw, 0 );
-    glTexCoord2d(1.0,1.0);
+    glTexCoord2d(texcoord_w,texcoord_h);
     glVertex2f( sw, sh );
-    glTexCoord2d(0.0,1.0);
+    glTexCoord2d(0.0,texcoord_h);
     glVertex2f( 0, sh );
 
     glEnd();

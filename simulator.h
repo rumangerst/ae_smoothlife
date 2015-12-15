@@ -23,9 +23,9 @@ public:
     simulator(const ruleset & rules);
     ~simulator();
 
-    const int field_size_x = FIELD_SIZE;
-    const int field_size_y = FIELD_SIZE;
-    const int field_ld = FIELD_SIZE;
+    const int field_size_x = 300;
+    const int field_size_y = 200;
+    const int field_ld = 300;
 
     const ruleset rules;
     atomic<matrix<double>*> space_current_atomic;

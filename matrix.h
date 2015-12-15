@@ -61,7 +61,7 @@ struct matrix
         ld = 0;
     }
 
-    matrix(int rows, int columns)
+    matrix(int columns, int rows)
     {
         int ld = matrix_calculate_ld(columns);
 
@@ -71,7 +71,7 @@ struct matrix
         this->ld = ld;
     }
 
-    matrix(int rows, int columns, int ld)
+    matrix(int columns, int rows, int ld)
     {
         this->M = vector<T>(ld * rows);
         this->rows = rows;
