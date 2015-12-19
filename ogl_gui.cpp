@@ -148,8 +148,8 @@ void ogl_gui::render()
 
     space_texture.loadFromMatrix(space->load());
 
-    cdouble w = space->load()->columns;
-    cdouble h = space->load()->rows;
+    cdouble w = space->load()->getNumCols();
+    cdouble h = space->load()->getNumRows();
     cdouble scale = fmin(sdl_window_w / w, sdl_window_h / h);
     cdouble sw = scale * w;
     cdouble sh = scale * h;

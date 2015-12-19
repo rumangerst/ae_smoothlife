@@ -15,16 +15,16 @@ ogl_texture::~ogl_texture()
 bool ogl_texture::loadFromMatrix(matrix<double> * M)
 {
     // The texture size should be power of two
-    cint tex_w = power_of_two(M->columns);
-    cint tex_h = power_of_two(M->rows);
+    cint tex_w = power_of_two(M->getNumCols());
+    cint tex_h = power_of_two(M->getNumRows());
 
     vector<GLfloat> pixels(tex_w * tex_h);
 
-    for(int x = 0; x < M->columns; ++x)
+    for(int x = 0; x < M->getNumCols(); ++x)
     {
-        for(int y = 0; y < M->rows; ++y)
+        for(int y = 0; y < M->getNumRows(); ++y)
         {
-            cdouble f = M->M[matrix_index(x,y,M->ld)];
+            cdouble f = M->getValue(x,y);
             //const unsigned char v = floor(f * 255);
 
             //pixels[matrix_index(x,y,texture_width)] = v << 24 | v << 16 | v << 8 | 255;

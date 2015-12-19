@@ -77,11 +77,13 @@ void gui::render()
     SDL_SetRenderDrawColor(renderer, 0,0,0,255);
     SDL_RenderClear(renderer);
 
-    for(int x = 0; x < space->load()->columns; ++x)
+    //TODO: optimize access via synchronization & de-coupling
+
+    for(int x = 0; x < space->load()->getNumCols(); ++x)
     {
-        for(int y = 0; y < space->load()->rows; ++y)
+        for(int y = 0; y < space->load()->getNumRows(); ++y)
         {
-            const double f = space->load()->M[matrix_index(x,y,space->load()->ld)];
+            const double f = space->load()->getValue(x,y);
 
             Uint8 a = (int)ceil(f * 255);
 

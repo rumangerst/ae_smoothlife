@@ -26,7 +26,7 @@ public:
 
     const int field_size_x = FIELD_W;
     const int field_size_y = FIELD_H;
-    const int field_ld = matrix_calculate_ld(FIELD_W);
+    //const int field_ld = matrix_calculate_ld(FIELD_W);
 
     const ruleset rules;
     atomic<matrix<double>*> space_current_atomic;
@@ -56,7 +56,8 @@ private:
         {
             for(int y = 0; y < field_size_y; ++y)
             {
-                space_current->M[matrix_index(x,y,field_ld)] = 1;
+                //space_current->M[matrix_index(x,y,field_ld)] = 1;
+                space_current->setValue(1,x,y);
             }
         }
     }
@@ -71,7 +72,8 @@ private:
         {
             for(int y = 0; y < field_size_y; ++y)
             {
-                space_current->M[matrix_index(x,y,field_ld)] = random_state(re);
+                //space_current->M[matrix_index(x,y,field_ld)] = random_state(re);
+                space_current->setValue(random_state(re),x,y);
             }
         }
     }
@@ -118,7 +120,8 @@ private:
                         while (py>=field_size_y) py-=field_size_y;
                         if (px>=0 && px<field_size_x && py>=0 && py<field_size_y)
                         {
-                            space_current->M[matrix_index(px,py,field_ld)] = 1.0;
+                            //space_current->M[matrix_index(px,py,field_ld)] = 1.0;
+                            space_current->setValue(1.0,px,py);
                         }
                     }
                 }
@@ -140,7 +143,8 @@ private:
         {
             for(int y = 0; y < field_size_y; ++y)
             {
-                space_current->M[matrix_index(x,y,field_ld)] = random_state(re) <= p_seed ? 1 : 0;
+                //space_current->M[matrix_index(x,y,field_ld)] = random_state(re) <= p_seed ? 1 : 0;
+                space_current->setValue(random_state(re) <= p_seed ? 1 : 0, x,y);
             }
         }
 
@@ -151,18 +155,22 @@ private:
             {
                 for(int y = 0; y < field_size_y; ++y)
                 {
-                    double f = space_current->M[matrix_index(x,y,field_ld)];
+                    double f = space_current->getValue(x,y);
 
                     if(f > 0.5)
                     {
                         if(random_state(re) <= p_proagate)
-                            space_current->M[matrix_index_wrapped(x - 1,y,field_size_x, field_size_y,field_ld)] = 1;
+                            //space_current->M[matrix_index_wrapped(x - 1,y,field_size_x, field_size_y,field_ld)] = 1;
+                            space_current->setValueWrapped(1,x-1,y);
                         if(random_state(re) <= p_proagate)
-                            space_current->M[matrix_index_wrapped(x + 1,y,field_size_x, field_size_y,field_ld)] = 1;
+                            //space_current->M[matrix_index_wrapped(x + 1,y,field_size_x, field_size_y,field_ld)] = 1;
+                            space_current->setValueWrapped(1,x+1,y);
                         if(random_state(re) <= p_proagate)
-                            space_current->M[matrix_index_wrapped(x,y - 1,field_size_x, field_size_y,field_ld)] = 1;
+                            //space_current->M[matrix_index_wrapped(x,y - 1,field_size_x, field_size_y,field_ld)] = 1;
+                            space_current->setValueWrapped(1,x,y-1);
                         if(random_state(re) <= p_proagate)
-                            space_current->M[matrix_index_wrapped(x,y + 1,field_size_x, field_size_y,field_ld)] = 1;
+                            //space_current->M[matrix_index_wrapped(x,y + 1,field_size_x, field_size_y,field_ld)] = 1;
+                            space_current->setValueWrapped(1,x,y+1);
                     }
                 }
             }
@@ -215,9 +223,9 @@ private:
 
     inline double f(cint x, cint y, cdouble n, cdouble m)
     {
-        cdouble v = space_current->M[matrix_index(x,y, field_ld)];
+        //cdouble v = space_current->M[matrix_index(x,y, field_ld)];
 
-        return v + rules.dt * ss(n,m);
+        return space_current->getValue(x,y) + rules.dt * ss(n,m);
     }
 
     double filling(cint x, cint y, const matrix<double> & m, cdouble m_sum);

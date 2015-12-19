@@ -9,10 +9,11 @@ using cdouble = const double;
 using cint = const int;
 
 /**
- * @brief matrix_index
- * @param x
- * @param y
- * @param ld
+ * @brief matrix_index, 0 <= x < ld , 0 <= y
+ * row-major
+ * @param x column index
+ * @param y row index
+ * @param ld number of elements in a row
  * @return The array index of matrix element x,y
  */
 inline int matrix_index(cint x, cint y, cint ld)
@@ -22,10 +23,15 @@ inline int matrix_index(cint x, cint y, cint ld)
 
 /**
  * @brief matrix_index_wrapped
- * @param x
- * @param y
- * @param w
- * @param h
+ * folds x and y back into the matrix, when these are out of bounds
+ * x and y can be negative!
+ * @Note may be useful for testing
+ * @Note may not be used for full optimization? TODO
+ * @param x column index
+ * @param y row index
+ * @param ld number of elements in a row
+ * @param w width of the matrix, i.e. number of columns
+ * @param h height of the matrix, i.e. number of rows
  * @return Wrapped matrix index
  */
 inline int matrix_index_wrapped(cint x, cint y, cint w, cint h, cint ld)
@@ -47,13 +53,18 @@ template <typename T>
 /**
  * @brief A matrix with row first approach
  */
-struct matrix
+class matrix
 {
+private:
     vector<T> M;
     int rows;
     int columns;
     int ld;
 
+public:
+    /**
+     * @brief creates an empty matrix
+     */
     matrix()
     {
         rows = 0;
@@ -61,6 +72,11 @@ struct matrix
         ld = 0;
     }
 
+    /**
+     * @brief standard constructor
+     * @param columns number of elements per column
+     * @param rows number of rows
+     */
     matrix(int columns, int rows)
     {
         int ld = matrix_calculate_ld(columns);
@@ -71,14 +87,10 @@ struct matrix
         this->ld = ld;
     }
 
-    matrix(int columns, int rows, int ld)
-    {
-        this->M = vector<T>(ld * rows);
-        this->rows = rows;
-        this->columns = columns;
-        this->ld = ld;
-    }
-
+    /**
+     * @brief creates a deep copy of the given matrix
+     * @param copy
+     */
     matrix(const matrix<T> & copy)
     {
         M = vector<T>(copy.M);
@@ -86,6 +98,22 @@ struct matrix
         columns = copy.columns;
         ld = copy.ld;
     }
+
+    // Getter and Setter methods
+
+    T getValue(cint x, cint y) const { return M[matrix_index(x,y,ld)]; }
+    T getValueWrapped(cint x, cint y) const { return M[matrix_index_wrapped(x,y,columns,rows,ld)]; }
+
+    void setValue(T val, cint x, cint y) { M[matrix_index(x,y,ld)] = val; }
+    void setValueWrapped(T val, cint x, cint y) { M[matrix_index_wrapped(x,y,columns,rows,ld)] = val; }
+    //TODO: setValueWrapped with dim? Should be avoided, i guess
+
+    int getLd() const { return this->ld; }
+    int getNumRows() const { return this->rows; }
+    int getNumCols() const { return this->columns; }
+
+    // Avanced Access Methods
+
 
     friend ostream& operator<<(ostream& out, const matrix<T> & m )
     {
@@ -161,3 +189,10 @@ struct matrix
         return s;
     }
 };
+
+
+template <typename T>
+bool is_vectorized_matrix(matrix<T>& mat) {
+    //TODO: implement this function here
+    return false;
+}

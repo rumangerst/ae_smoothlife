@@ -1,7 +1,7 @@
 #include "simulator.h"
 
 simulator::simulator(const ruleset & r) : rules(r)
-{    
+{
 
 }
 
@@ -18,8 +18,8 @@ void simulator::initialize()
 {
     cout << "Initializing ..." << endl;
 
-    space_current = new matrix<double>(field_size_x, field_size_y, field_ld);
-    space_next = new matrix<double>(field_size_x, field_size_y, field_ld);
+    space_current = new matrix<double>(field_size_x, field_size_y);
+    space_next = new matrix<double>(field_size_x, field_size_y);
     space_current_atomic.store(space_current);
 
     m_mask = matrix<double>(rules.ri * 2, rules.ri * 2);
@@ -58,7 +58,8 @@ void simulator::simulate()
 
                 //Calculate the new state based on fillings n and m
                 //Smooth state function must be clamped to [0,1] (this is also done by author's implementation!)
-                space_next->M[matrix_index(x,y,field_ld)] = rules.discrete ? s(n,m) : fmax(0,fmin(1,f(x,y,n,m)));
+                //space_next->M[matrix_index(x,y,field_ld)] = rules.discrete ? s(n,m) : fmax(0,fmin(1,f(x,y,n,m)));
+                space_next->setValue(rules.discrete ? s(n,m) : fmax(0,fmin(1,f(x,y,n,m))), x,y);
 
             }
         }
@@ -120,10 +121,10 @@ void simulator::simulate()
 double simulator::filling(cint x, cint y, const matrix<double> &m, cdouble m_sum)
 {
     // The theorectically considered bondaries
-    cint x_begin = x - m.rows / 2;
-    cint x_end = x + m.rows / 2;
-    cint y_begin = y - m.rows / 2;
-    cint y_end = y + m.rows / 2;
+    cint x_begin = x - m.getNumRows() / 2;
+    cint x_end = x + m.getNumRows() / 2;
+    cint y_begin = y - m.getNumRows() / 2;
+    cint y_end = y + m.getNumRows() / 2;
 
     double f = 0;
 
@@ -134,7 +135,8 @@ double simulator::filling(cint x, cint y, const matrix<double> &m, cdouble m_sum
             #pragma omp simd
             for(int x = x_begin; x < x_end; ++x)
             {
-                f += space_current->M[matrix_index(x,y,field_ld)] * m.M[matrix_index(x - x_begin, y - y_begin, m.ld)];
+                //f += space_current->M[matrix_index(x,y,field_ld)] * m.M[matrix_index(x - x_begin, y - y_begin, m.ld)];
+                f += space_current->getValue(x,y) * m.getValue(x - x_begin, y - y_begin);
             }
         }
     }
@@ -144,7 +146,8 @@ double simulator::filling(cint x, cint y, const matrix<double> &m, cdouble m_sum
         {
             for(int x = x_begin; x < x_end; ++x)
             {
-                f += space_current->M[matrix_index_wrapped(x,y,field_size_x,field_size_y,field_ld)] * m.M[matrix_index(x - x_begin, y - y_begin, m.ld)];
+                //f += space_current->M[matrix_index_wrapped(x,y,field_size_x,field_size_y,field_ld)] * m.M[matrix_index(x - x_begin, y - y_begin, m.ld)];
+                f += space_current->getValueWrapped(x,y) * m.getValue(x - x_begin, y - y_begin);
             }
         }
     }
