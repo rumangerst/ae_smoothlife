@@ -9,6 +9,8 @@
 
 using namespace std;
 
+#define WAIT_FOR_RENDERING true // if true, calcation threads will be waiting for the renderer to give a finishing signal
+
 #define FIELD_W 300
 #define FIELD_H 200
 #define ENABLE_SIMULATION true
@@ -26,7 +28,6 @@ public:
 
     const int field_size_x = FIELD_W;
     const int field_size_y = FIELD_H;
-    //const int field_ld = matrix_calculate_ld(FIELD_W);
 
     const ruleset rules;
     atomic<matrix<double>*> space_current_atomic;
@@ -48,15 +49,16 @@ private:
 
     matrix<double>* space_current;
     matrix<double>* space_next;
+    std::atomic<bool> can_calc_next_step;
+
+    void allowNextStep(const bool allow) { can_calc_next_step.store(allow); }
 
     void initialize_field_1()
     {
-
         for(int x = 0; x < field_size_x; ++x)
         {
             for(int y = 0; y < field_size_y; ++y)
             {
-                //space_current->M[matrix_index(x,y,field_ld)] = 1;
                 space_current->setValue(1,x,y);
             }
         }
@@ -72,7 +74,6 @@ private:
         {
             for(int y = 0; y < field_size_y; ++y)
             {
-                //space_current->M[matrix_index(x,y,field_ld)] = random_state(re);
                 space_current->setValue(random_state(re),x,y);
             }
         }
@@ -120,7 +121,6 @@ private:
                         while (py>=field_size_y) py-=field_size_y;
                         if (px>=0 && px<field_size_x && py>=0 && py<field_size_y)
                         {
-                            //space_current->M[matrix_index(px,py,field_ld)] = 1.0;
                             space_current->setValue(1.0,px,py);
                         }
                     }
@@ -143,7 +143,6 @@ private:
         {
             for(int y = 0; y < field_size_y; ++y)
             {
-                //space_current->M[matrix_index(x,y,field_ld)] = random_state(re) <= p_seed ? 1 : 0;
                 space_current->setValue(random_state(re) <= p_seed ? 1 : 0, x,y);
             }
         }
@@ -160,16 +159,12 @@ private:
                     if(f > 0.5)
                     {
                         if(random_state(re) <= p_proagate)
-                            //space_current->M[matrix_index_wrapped(x - 1,y,field_size_x, field_size_y,field_ld)] = 1;
                             space_current->setValueWrapped(1,x-1,y);
                         if(random_state(re) <= p_proagate)
-                            //space_current->M[matrix_index_wrapped(x + 1,y,field_size_x, field_size_y,field_ld)] = 1;
                             space_current->setValueWrapped(1,x+1,y);
                         if(random_state(re) <= p_proagate)
-                            //space_current->M[matrix_index_wrapped(x,y - 1,field_size_x, field_size_y,field_ld)] = 1;
                             space_current->setValueWrapped(1,x,y-1);
-                        if(random_state(re) <= p_proagate)
-                            //space_current->M[matrix_index_wrapped(x,y + 1,field_size_x, field_size_y,field_ld)] = 1;
+                        if(random_state(re) <= p_proagate);
                             space_current->setValueWrapped(1,x,y+1);
                     }
                 }
@@ -209,23 +204,21 @@ private:
      * @param m Inner Filling
      * @return New state
      */
-    inline double s(cdouble n, cdouble m)
+    inline double discrete_state_func_1(cdouble n, cdouble m)
     {
         //According to ref. implementation
         return sigmam(sigma2(n,rules.b1,rules.b2),sigma2(n,rules.d1,rules.d2),m);
         //return sigma2(n, sigmam(rules.b1,rules.d1,m),sigmam(rules.b2,rules.d2,m));
     }
 
-    inline double ss(cdouble n, cdouble m)
+    inline double discrete_as_euler(cdouble n, cdouble m)
     {
-        return 2.0 * s(n,m) - 1.0;
+        return 2.0 * discrete_state_func_1(n,m) - 1.0;
     }
 
-    inline double f(cint x, cint y, cdouble n, cdouble m)
+    inline double next_step_as_euler(cint x, cint y, cdouble n, cdouble m)
     {
-        //cdouble v = space_current->M[matrix_index(x,y, field_ld)];
-
-        return space_current->getValue(x,y) + rules.dt * ss(n,m);
+        return space_current->getValue(x,y) + rules.dt * discrete_as_euler(n,m);
     }
 
     double filling(cint x, cint y, const matrix<double> & m, cdouble m_sum);

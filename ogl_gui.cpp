@@ -13,6 +13,11 @@ ogl_gui::~ogl_gui()
     }
 }
 
+void ogl_gui::allowNextStep() {
+    //TODO: implement
+    //TODO: may send a signal over MPI in the future
+}
+
 void ogl_gui::run()
 {
     if(init() & load())

@@ -23,7 +23,16 @@ public:
     ogl_gui();
     ~ogl_gui();
 
+    /**
+     * @brief runs an (in)finite loop for the opengl rederer
+     */
     void run();
+
+    /**
+     * @brief used to tell calculation threads and machines (MPI) to calc the next image(s)
+     * may be used in combination with advanced buffering to keep calc-threads from ideling to long
+     */
+    void allowNextStep();
 
 private:
 

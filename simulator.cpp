@@ -2,7 +2,7 @@
 
 simulator::simulator(const ruleset & r) : rules(r)
 {
-
+    this->can_calc_next_step = true;
 }
 
 simulator::~simulator()
@@ -58,8 +58,7 @@ void simulator::simulate()
 
                 //Calculate the new state based on fillings n and m
                 //Smooth state function must be clamped to [0,1] (this is also done by author's implementation!)
-                //space_next->M[matrix_index(x,y,field_ld)] = rules.discrete ? s(n,m) : fmax(0,fmin(1,f(x,y,n,m)));
-                space_next->setValue(rules.discrete ? s(n,m) : fmax(0,fmin(1,f(x,y,n,m))), x,y);
+                space_next->setValue(rules.discrete ? discrete_state_func_1(n,m) : fmax(0,fmin(1,next_step_as_euler(x,y,n,m))), x,y);
 
             }
         }
@@ -71,6 +70,13 @@ void simulator::simulate()
         space_current_atomic.store(space_current);
 
         ++time;
+
+        if (WAIT_FOR_RENDERING) {
+            //TODO: may catch a signal from MPI (from the renderer) in the future
+            //TODO: if we use triple buffering, 2 time steps may be calculated before calculation threads start to idle!
+            this->can_calc_next_step = false;
+            while(can_calc_next_step == false) {}; // wait until renderer finished
+        }
     }
 
     //Print the two masks
@@ -135,7 +141,6 @@ double simulator::filling(cint x, cint y, const matrix<double> &m, cdouble m_sum
             #pragma omp simd
             for(int x = x_begin; x < x_end; ++x)
             {
-                //f += space_current->M[matrix_index(x,y,field_ld)] * m.M[matrix_index(x - x_begin, y - y_begin, m.ld)];
                 f += space_current->getValue(x,y) * m.getValue(x - x_begin, y - y_begin);
             }
         }
@@ -146,7 +151,6 @@ double simulator::filling(cint x, cint y, const matrix<double> &m, cdouble m_sum
         {
             for(int x = x_begin; x < x_end; ++x)
             {
-                //f += space_current->M[matrix_index_wrapped(x,y,field_size_x,field_size_y,field_ld)] * m.M[matrix_index(x - x_begin, y - y_begin, m.ld)];
                 f += space_current->getValueWrapped(x,y) * m.getValue(x - x_begin, y - y_begin);
             }
         }
