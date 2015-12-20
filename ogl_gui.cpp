@@ -13,6 +13,11 @@ ogl_gui::~ogl_gui()
     }
 }
 
+void ogl_gui::allowNextStep() {
+    //TODO: implement
+    //TODO: may send a signal over MPI in the future
+}
+
 void ogl_gui::run()
 {
     if(init() & load())
@@ -35,8 +40,11 @@ void ogl_gui::run()
                 }
             }
 
+            //matrix<float>* current_render_space = this->space->load(); // remember the space
             update_gl();
             render();
+
+            //TODO: synchronize renderer with calc!
 
             SDL_GL_SwapWindow(window);
         }

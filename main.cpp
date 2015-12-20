@@ -55,7 +55,7 @@ int main()
 #endif
 
     g.simulator_status = &s.running;
-    g.space = &s.space_current_atomic;
+    g.space = &s.space_of_renderer;
 
     #pragma omp parallel
     {

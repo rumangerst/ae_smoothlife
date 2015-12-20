@@ -5,8 +5,10 @@
 
 using namespace std;
 
+using cfloat = const float;
 using cdouble = const double;
 using cint = const int;
+using clong = const long;
 
 /**
  * @brief matrix_index, 0 <= x < ld , 0 <= y

@@ -12,7 +12,7 @@ ogl_texture::~ogl_texture()
     free();
 }
 
-bool ogl_texture::loadFromMatrix(matrix<double> * M)
+bool ogl_texture::loadFromMatrix(matrix<float> * M)
 {
     // The texture size should be power of two
     cint tex_w = power_of_two(M->getNumCols());
@@ -24,7 +24,7 @@ bool ogl_texture::loadFromMatrix(matrix<double> * M)
     {
         for(int y = 0; y < M->getNumRows(); ++y)
         {
-            cdouble f = M->getValue(x,y);
+            cfloat f = M->getValue(x,y);
             //const unsigned char v = floor(f * 255);
 
             //pixels[matrix_index(x,y,texture_width)] = v << 24 | v << 16 | v << 8 | 255;
