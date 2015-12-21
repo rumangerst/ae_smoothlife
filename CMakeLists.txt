@@ -3,7 +3,7 @@ project(ae_smoothlife)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${ae_smoothlife_SOURCE_DIR}/cmake")
 
-set(CMAKE_CXX_FLAGS "-std=c++1y -pedantic -march=native -Wall -Werror -fopenmp -ftree-vectorize -ftree-vectorizer-verbose=5")
+set(CMAKE_CXX_FLAGS "-std=c++1y -O2 -pedantic -march=native -Wall -Werror -fopenmp -ftree-vectorize -fopt-info-vec-missed -ftree-vectorizer-verbose=5")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
 set(CMAKE_CXX_FLAGS_DEBUG "-O0 -g")
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O3 -DNDEBUG -g")
