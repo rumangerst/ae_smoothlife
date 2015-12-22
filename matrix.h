@@ -131,45 +131,62 @@ public:
         return out;
     }
 
-    void set_circle(cint x, cint y, cint r, const T v)
+    /**
+     * @brief Sets the matrix values in a circle around given center
+     * @param x x coordinate (double). The center x of the matrix is columns / 2.0
+     * @param y y coordinate (double). The center y of the matrix is rows / 2.0
+     * @param r radius of the circle
+     * @param v the value the elements in the circle should be set to.
+     * @param smooth smooth the circle. To prevent cutting it off, increase width by 2 or decrease radius by 1
+     */
+    void set_circle(cdouble center_x, cdouble center_y, cdouble r, const T v, const bool smooth)
     {
         for(int i = 0; i < columns; ++i)
         {
             for(int j = 0; j < rows; ++j)
             {
-                cdouble s_sq = (i-x)*(i-x) + (j-y)*(j-y);
+                /*cdouble s_sq = (i-x)*(i-x) + (j-y)*(j-y);
 
                 if(s_sq <= r*r)
                 {
                     M[matrix_index(i,j,ld)] = v;
-                }
+                }*/
 
-                /*cdouble d = sqrt((i-x)*(i-x) + (j-y)*(j-y));
+                cdouble local_x = i + 0.5;
+                cdouble local_y = j + 0.5;
 
-                if(d <= r)
+                cdouble d = sqrt((local_x-center_x)*(local_x-center_x) + (local_y-center_y)*(local_y-center_y));
+
+                /*if(d <= r)
                 {
                     M[matrix_index(i,j,ld)] = v;
                 }*/
 
-                /*if(d <= r)
+                if(d <= r)
                 {
                     // The point is in radius. No further actions needed
                     M[matrix_index(i,j,ld)] = v;
                 }
-                else if( floor(d) <= r)
+                else if( smooth && floor(d) <= r)
                 {
                     //Distance between next point in circle and the point outside circle
                     cdouble d_tf = d - floor(d);
 
-                    M[matrix_index(i,j,ld)] = v * (1.0 - d_tf); //Works.
-                }*/
+                    M[matrix_index(i,j,ld)] = abs(v - d_tf); //Works.
+                }
             }
         }
     }
 
-    void set_circle(cint r, const T v)
+    /**
+     * @brief Sets the matrix values in a circle around matrix center
+     * @param r
+     * @param v
+     * @param smooth smooth the circle. To prevent cutting it off, increase width by 2 or decrease radius by 1
+     */
+    void set_circle(cdouble r, const T v, const bool smooth)
     {
-        set_circle(columns / 2, rows / 2, r, v);
+        set_circle(columns / 2.0, rows / 2.0, r, v, smooth);
     }
 
     /**

@@ -22,21 +22,35 @@ void simulator::initialize()
     space_next = new matrix<float>(field_size_x, field_size_y);
     space_of_renderer.store(space_current);
 
+    // Initialize masks with smoothing
+    /*
     outer_mask = matrix<float>(rules.ri * 2, rules.ri * 2);
-    innner_mask = matrix<float>(rules.ra * 2, rules.ra * 2);
+    inner_mask = matrix<float>(rules.ra * 2, rules.ra * 2);
 
-    outer_mask.set_circle(rules.ri, 1);
-    innner_mask.set_circle(rules.ra, 1);
-    innner_mask.set_circle(rules.ri, 0);
+    outer_mask.set_circle(rules.ri, 1, false);
+    inner_mask.set_circle(rules.ra, 1, false);
+    inner_mask.set_circle(rules.ri, 0, false);*/
+
+    // Initialize masks without smoothing
+    // Either radius must be decreased by 1 or size increased by 2
+    // Decrease radius = Floor integral approx.
+    // Increase size = Ceiling integral approx.
+    outer_mask = matrix<float>(rules.ri * 2 + 2, rules.ri * 2 + 2);
+    inner_mask = matrix<float>(rules.ra * 2 + 2, rules.ra * 2 + 2);
+
+    outer_mask.set_circle(rules.ri, 1, true);
+    inner_mask.set_circle(rules.ra, 1, true);
+    inner_mask.set_circle(rules.ri, 0, true);
 
     outer_mask_sum = outer_mask.sum();
-    inner_mask_sum = innner_mask.sum();
+    inner_mask_sum = inner_mask.sum();
 
+#if SIMULATOR_MODE == MODE_SIMULATE || SIMULATOR_MODE == MODE_TEST_INITIALIZE
     //initialize_field_propagate();
     //initialize_field_random();
     //initialize_field_1();
-    if(INITIALIZE_FIELD)
      initialize_field_splat();
+#endif
 
     initialized = true;
 }
@@ -45,7 +59,10 @@ void simulator::simulate()
 {
     cout << "Running ..." << endl;
 
-    running = ENABLE_SIMULATION;
+
+#if SIMULATOR_MODE == MODE_SIMULATE
+
+    running = true;
 
     while(running)
     {
@@ -53,7 +70,7 @@ void simulator::simulate()
         {
             for(int y = 0; y < field_size_y; ++y)
             {
-                cfloat n = filling(x, y, innner_mask, inner_mask_sum); // filling of inner circle
+                cfloat n = filling(x, y, inner_mask, inner_mask_sum); // filling of inner circle
                 cfloat m = filling(x, y, outer_mask, outer_mask_sum); // filling of outer ring
 
                 //Calculate the new state based on fillings n and m
@@ -79,49 +96,55 @@ void simulator::simulate()
         space_of_renderer.store(space_current);
     }
 
-    //Print the two masks
-    /*for(int x = 0; x < m_mask.columns; ++x)
-    {
-        for(int y = 0; y < m_mask.rows; ++y)
-        {
-            space_current->M[matrix_index(x,y,space_current->ld)] = m_mask.M[matrix_index(x,y,m_mask.ld)];
-        }
-    }
-    for(int x = 0; x < n_mask.columns; ++x)
-    {
-        for(int y = 0; y < n_mask.rows; ++y)
-        {
-            space_current->M[matrix_index(x + m_mask.columns + 10,y + m_mask.rows + 10,space_current->ld)] = n_mask.M[matrix_index(x,y,n_mask.ld)];
-        }
-    }
-     space_current_atomic.store(space_current);*/
+#elif SIMULATOR_MODE == MODE_TEST_MASKS
 
+    //Print the two masks
+    for(int x = 0; x < inner_mask.getNumCols(); ++x)
+    {
+        for(int y = 0; y < inner_mask.getNumRows(); ++y)
+        {
+            space_current->setValue(inner_mask.getValue(x,y),x,y);
+        }
+    }
+    for(int x = 0; x < outer_mask.getNumCols(); ++x)
+    {
+        for(int y = 0; y < outer_mask.getNumRows(); ++y)
+        {
+            space_current->setValue(outer_mask.getValue(x,y),x + inner_mask.getNumCols() + 10,y + inner_mask.getNumRows() + 10);
+        }
+    }
+     space_of_renderer.store(space_current);
+
+#elif SIMULATOR_MODE == MODE_TEST_COLORS
 
     //Test the colors
-    /*for(int x = 0; x < field_size_x; ++x)
+    for(int x = 0; x < field_size_x; ++x)
     {
         for(int y = 0; y < field_size_y; ++y)
         {
             double m = (double)y / field_size_y;
             double n = (double)x / field_size_x;
 
-            double &  value = space_current->M[matrix_index(x,y,field_ld)];
+            double &  value = space_current->getValue(x,y);
             value = (n + m) / 2.0;
         }
-    }*/
+    }
 
+#elif SIMULATOR_MODE == MODE_TEST_STATE_FUNCTION
     //Test to print s(n,m)
-    /*for(int x = 0; x < field_size_x; ++x)
+    for(int x = 0; x < field_size_x; ++x)
     {
         for(int y = 0; y < field_size_y; ++y)
         {
             double m = (double)y / field_size_y;
             double n = (double)x / field_size_x;
 
-            double &  value = space_current->M[matrix_index(x,y,field_ld)];
+            double &  value = space_current->getValue(x,y);
             value = s(n,m);
         }
-    }*/
+    }
+
+#endif
 }
 
 float simulator::filling(cint x, cint y, const matrix<float> &mask, cfloat mask_sum)

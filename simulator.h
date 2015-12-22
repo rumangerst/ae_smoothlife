@@ -1,4 +1,10 @@
 #pragma once
+#define MODE_SIMULATE 0
+#define MODE_TEST_INITIALIZE 1
+#define MODE_TEST_MASKS 2
+#define MODE_TEST_COLORS 3
+#define MODE_TEST_STATE_FUNCTION 4
+
 #include <iostream>
 #include <math.h>
 #include <vector>
@@ -9,12 +15,14 @@
 
 using namespace std;
 
+
+
 #define WAIT_FOR_RENDERING false // if true, calcation threads will be waiting for the renderer to give a finishing signal
 
 #define FIELD_W 300
 #define FIELD_H 200
-#define ENABLE_SIMULATION true
-#define INITIALIZE_FIELD true
+
+#define SIMULATOR_MODE MODE_SIMULATE //Set the mode of the simulator
 
 
 /**
@@ -35,7 +43,7 @@ public:
     ulong spacetime = 0;
 
     matrix<float> outer_mask; // mask to calculate the filling of the outer ring
-    matrix<float> innner_mask; // mask to calculate the filling of the inner cycle
+    matrix<float> inner_mask; // mask to calculate the filling of the inner cycle
     float outer_mask_sum;
     float inner_mask_sum;
 
