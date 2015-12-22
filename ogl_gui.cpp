@@ -253,6 +253,25 @@ bool ogl_gui::load_shaders()
         shaders.push_back(shader);
     }
 
+    // Load blue shader
+    {
+        ogl_shader * shader = new ogl_shader("Blue");
+
+        const char * source_vertex =
+        #include "shaders/blue.vsh"
+                ;
+        const char * source_pixel =
+        #include "shaders/blue.fsh"
+                ;
+
+        if(!shader->load_program(source_vertex, source_pixel))
+        {
+            return false;
+        }
+
+        shaders.push_back(shader);
+    }
+
     switch_shader();
 
     return true;

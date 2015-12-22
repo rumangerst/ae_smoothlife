@@ -29,7 +29,9 @@ ogl_texture.cpp
 shaders/grayscale.vsh
 shaders/grayscale.fsh
 shaders/microscope.vsh
-shaders/microscope.fsh)
+shaders/microscope.fsh
+shaders/blue.vsh
+shaders/blue.fsh)
 
 set(SOURCES ${SOURCES_SIM} ${SOURCES_GUI})
 
