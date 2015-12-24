@@ -254,6 +254,25 @@ bool ogl_gui::load_shaders()
         shaders.push_back(shader);
     }
 
+    // Load microscope 2 shader
+    {
+        ogl_shader * shader = new ogl_shader("Microscope 2");
+
+        const char * source_vertex =
+        #include "shaders/microscope2.vsh"
+                ;
+        const char * source_pixel =
+        #include "shaders/microscope2.fsh"
+                ;
+
+        if(!shader->load_program(source_vertex, source_pixel))
+        {
+            return false;
+        }
+
+        shaders.push_back(shader);
+    }
+
     // Load blue shader
     {
         ogl_shader * shader = new ogl_shader("Blue");
