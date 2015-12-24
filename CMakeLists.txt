@@ -30,6 +30,8 @@ shaders/grayscale.vsh
 shaders/grayscale.fsh
 shaders/microscope.vsh
 shaders/microscope.fsh
+shaders/microscope2.vsh
+shaders/microscope2.fsh
 shaders/blue.vsh
 shaders/blue.fsh)
 

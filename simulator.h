@@ -15,7 +15,7 @@
 
 using namespace std;
 
-#define WAIT_FOR_RENDERING false // if true, calcation threads will be waiting for the renderer to give a finishing signal
+#define WAIT_FOR_RENDERING true // if true, calcation threads will be waiting for the renderer to give a finishing signal
 
 #define FIELD_W 300
 #define FIELD_H 200
