@@ -1,8 +1,8 @@
-#include "simulator.h"
+﻿#include "simulator.h"
 
 simulator::simulator(const ruleset & r) : rules(r)
 {
-    this->can_calc_next_step = true;
+    new_space_available.store(false);
 }
 
 simulator::~simulator()
@@ -84,16 +84,28 @@ void simulator::simulate()
         std::swap(space_current, space_next);
         ++spacetime;
 
+        /*
+         * NOTE: Start of synchronization
+         * - the master simulator (and all others) waits for the renderer to finish drawing the last image
+         * - it then blocks the renderer from continuing until "space_current" has been passed over
+         * - HACK: deep copy would make it so much simpler :o
+         */
         if (WAIT_FOR_RENDERING) {
             //TODO: may catch a signal from MPI (from the renderer) in the future & only the gui machine has to do that
-            //TODO: in case of double buffer, we can already swap, but need to wait until rendering finished
-            //TODO: if we use triple buffering, 2 time steps may be calculated before calculation threads start to idle!
-            this->can_calc_next_step = false;
-            while(can_calc_next_step == false) {}; // wait until renderer finished
+            //HACK: in case of double buffer, we can already swap, but need to wait until rendering finished
+            //HACK: if we use triple buffering, 2 time steps may be calculated before calculation threads start to idle!
+            this->new_space_available = true; // prevent renderer from continuing after finishing the current image
+            while(!*this->is_space_drawn_once_by_renderer) {
+            } // wait for renderer...
         }
+
+        if (spacetime%100 == 0)
+            cout << "sim: " << spacetime << "\n";
 
         //Tell outside (e.g. renderer)
         space_of_renderer.store(space_current);
+        *this->is_space_drawn_once_by_renderer = false;
+        this->new_space_available = false; // finish sync
     }
 
 #elif SIMULATOR_MODE == MODE_TEST_MASKS

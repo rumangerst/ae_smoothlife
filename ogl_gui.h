@@ -18,7 +18,11 @@ class ogl_gui
 {
 public:
      atomic<matrix<float> *>* space = nullptr;
+     atomic<bool> is_space_drawn_once; //TODO: is probably obsolete with MPI, but still still good for testing first!
+     atomic<bool>* new_space_available; // if true, wait for the master simulator to change the current space
      bool * simulator_status = nullptr;
+
+     ulong num_images_rendered = 0; // just for debugging
 
     ogl_gui();
     ~ogl_gui();
@@ -29,10 +33,10 @@ public:
     void run();
 
     /**
-     * @brief used to tell calculation threads and machines (MPI) to calc the next image(s)
-     * may be used in combination with advanced buffering to keep calc-threads from ideling to long
+     * @brief checks whether or not a new image should be processed (imo)
+     * @return TRUE for asynchronize rendering or certain properties
      */
-    void allowNextStep();
+    bool allowNextStep();
 
 private:
 

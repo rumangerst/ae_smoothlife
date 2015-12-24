@@ -15,8 +15,6 @@
 
 using namespace std;
 
-
-
 #define WAIT_FOR_RENDERING false // if true, calcation threads will be waiting for the renderer to give a finishing signal
 
 #define FIELD_W 300
@@ -39,6 +37,8 @@ public:
 
     const ruleset rules;
     atomic<matrix<float>*> space_of_renderer;
+    atomic<bool>* is_space_drawn_once_by_renderer; //TODO: is probably obsolete with MPI, but still still good for testing first!
+    atomic<bool> new_space_available;
 
     ulong spacetime = 0;
 
@@ -57,9 +57,6 @@ private:
 
     matrix<float>* space_current;
     matrix<float>* space_next;
-    std::atomic<bool> can_calc_next_step;
-
-    void allowNextStep(const bool allow) { can_calc_next_step.store(allow); }
 
     void initialize_field_1()
     {

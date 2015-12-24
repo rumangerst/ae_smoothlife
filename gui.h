@@ -18,6 +18,8 @@ class gui
 public:
 
     atomic<matrix<double> *>* space = nullptr;
+    atomic<bool> is_space_drawn_once; //TODO: is probably obsolete with MPI, but still still good for testing first!
+    atomic<bool>* new_space_available;
     bool * simulator_status = nullptr;
 
     gui();

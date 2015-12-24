@@ -2,7 +2,7 @@
 
 ogl_gui::ogl_gui()
 {
-
+    is_space_drawn_once.store(false);
 }
 
 ogl_gui::~ogl_gui()
@@ -13,9 +13,8 @@ ogl_gui::~ogl_gui()
     }
 }
 
-void ogl_gui::allowNextStep() {
-    //TODO: implement
-    //TODO: may send a signal over MPI in the future
+bool ogl_gui::allowNextStep() {
+    return (WAIT_FOR_RENDERING == false) || !*new_space_available;
 }
 
 void ogl_gui::run()
@@ -40,12 +39,14 @@ void ogl_gui::run()
                 }
             }
 
-            //matrix<float>* current_render_space = this->space->load(); // remember the space
             update_gl();
             render();
+            this->is_space_drawn_once = true;
+            while(!this->allowNextStep()) {}
 
-            //TODO: synchronize renderer with calc!
-
+            num_images_rendered++;
+            if (num_images_rendered%100 == 0)
+                cout << "ren: " << num_images_rendered << "\n";
             SDL_GL_SwapWindow(window);
         }
     }

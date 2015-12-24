@@ -2,6 +2,7 @@
 
 gui::gui()
 {
+    is_space_drawn_once.store(false);
 }
 
 gui::~gui()

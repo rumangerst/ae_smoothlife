@@ -56,6 +56,8 @@ int main()
 
     g.simulator_status = &s.running;
     g.space = &s.space_of_renderer;
+    s.is_space_drawn_once_by_renderer = &g.is_space_drawn_once;
+    g.new_space_available = &s.new_space_available;
 
     #pragma omp parallel
     {
