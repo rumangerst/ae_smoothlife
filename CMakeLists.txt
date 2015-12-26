@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0)
-project(ae_smoothlife)
+project(ae_smoothlife)    
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${ae_smoothlife_SOURCE_DIR}/cmake")
 
@@ -17,6 +17,7 @@ set(SOURCES_SIM
 main.cpp
 simulator.cpp
 matrix.h
+aligned_vector.h
 ruleset.h
 mpi_manager.h)
 
@@ -43,6 +44,9 @@ find_package(GLEW REQUIRED)
 
 include_directories(${SDL2_INCLUDE_DIR})
 
+find_package(Boost 1.59.0 REQUIRED)
+include_directories(${Boost_INCLUDE_DIRS})
+
 # Three executables:
 # smoothlife_sim: Simulator only, no graphics
 # smoothlife_ui: GUI only, obtains data from smoothlife and displays it
@@ -55,7 +59,8 @@ add_executable(smoothlife_local ${SOURCES_SIM} ${SOURCES_GUI})
 # smoothlife_local gets #ifdef GUI and #ifdef SIM
 # smoothlife_sim gets #ifdef SIM
 set_target_properties(smoothlife_sim PROPERTIES COMPILE_FLAGS "-DSIM")
+target_link_libraries(smoothlife_sim ${Boost_LIBRARIES})
 set_target_properties(smoothlife_ui PROPERTIES COMPILE_FLAGS "-DGUI")
 target_link_libraries(smoothlife_ui ${SDL2_LIBRARY} ${OPENGL_gl_LIBRARY} ${OPENGL_glu_LIBRARY} ${GLEW_LIBRARIES})
 set_target_properties(smoothlife_local PROPERTIES COMPILE_FLAGS "-DGUI -DSIM")
-target_link_libraries(smoothlife_local ${SDL2_LIBRARY} ${OPENGL_gl_LIBRARY} ${OPENGL_glu_LIBRARY} ${GLEW_LIBRARIES})
+target_link_libraries(smoothlife_local ${SDL2_LIBRARY} ${OPENGL_gl_LIBRARY} ${OPENGL_glu_LIBRARY} ${GLEW_LIBRARIES} ${Boost_LIBRARIES})

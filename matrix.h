@@ -211,6 +211,11 @@ public:
 
 
 template <typename T>
+/**
+ * @brief return TRUE, if the given matrix is optimized for vectorization
+ * @param mat
+ * @return
+ */
 bool is_vectorized_matrix(matrix<T>& mat) {
     //TODO: implement this function here
     return false;
