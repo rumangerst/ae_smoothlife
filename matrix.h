@@ -10,12 +10,12 @@
  * - building of (circular) masks
  * - capsulation
  * - alignment to cache line
+ * - padded to fit cacheline size
  */
 
 /*
  * TODO: Vectorization
  * 1. apply alignment tests (function already available)
- * 2. apply padding, if neccessary
  *
  * TODO: circle
  * 1. smoothing is half done (outer ring needs "trapez" smoothing)
@@ -64,9 +64,9 @@ inline int matrix_index_wrapped(cint x, cint y, cint w, cint h, cint ld)
  * @param size
  * @return
  */
-inline int matrix_calculate_ld(int size)
+inline int matrix_calc_ld_with_padding(const int size, const int cachline_size)
 {
-    return 64 * ceil(size / 64.0);
+    return cachline_size * ceil(float(size) / cachline_size);
 }
 
 template <typename T>
@@ -99,7 +99,7 @@ public:
      */
     vectorized_matrix(int columns, int rows)
     {
-        int ld = matrix_calculate_ld(columns);
+        int ld = matrix_calc_ld_with_padding(columns, CACHELINE_SIZE);
 
         this->M = aligned_vector<T>(ld * rows);
         this->rows = rows;
@@ -196,6 +196,7 @@ public:
         }
     }
 
+
     int getNumBytesPerRow() {
         return sizeof(T)*ld;
     }
@@ -248,7 +249,7 @@ bool is_vectorized_matrix(vectorized_matrix<T>* mat) {
         return false;
     }
 
-    if (mat->getNumBytesPerRow()/CACHELINE_SIZE) {
+    if (mat->getNumBytesPerRow() % CACHELINE_SIZE != 0) {
         printf("leading dimension of mat does not fit to cacheline size!");
         return false;
     }

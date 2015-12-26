@@ -235,5 +235,5 @@ private:
      * @param mask_sum the sum of all values in the given matrix (the maximal, obtainable value of this function)
      * @return a float with a value in [0,1]
      */
-    float filling(cint x, cint y, const vectorized_matrix<float> & mask, cfloat mask_sum);
+    float getFilling(cint x, cint y, const vectorized_matrix<float> & mask, cfloat mask_sum);
 };

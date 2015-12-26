@@ -75,14 +75,13 @@ void simulator::simulate()
     cout << "Running ..." << endl;
 
 
-#if SIMULATOR_MODE == MODE_SIMULATE
+    if (SIMULATOR_MODE == MODE_SIMULATE) //changed because it was extremely hard to read with that kind of set up
+        running = true;
 
-    running = true;
-
-#ifdef ENABLE_PERF_MEASUREMENT
-    auto perf_time_start = chrono::high_resolution_clock::now();
-    ulong perf_spacetime_start = 0;
-#endif
+    #ifdef ENABLE_PERF_MEASUREMENT
+        auto perf_time_start = chrono::high_resolution_clock::now();
+        ulong perf_spacetime_start = 0;
+    #endif
 
     while(running)
     {
@@ -90,8 +89,8 @@ void simulator::simulate()
         {
             for(int y = 0; y < field_size_y; ++y)
             {
-                cfloat n = filling(x, y, inner_mask, inner_mask_sum); // filling of inner circle
-                cfloat m = filling(x, y, outer_mask, outer_mask_sum); // filling of outer ring
+                cfloat n = getFilling(x, y, inner_mask, inner_mask_sum); // filling of inner circle
+                cfloat m = getFilling(x, y, outer_mask, outer_mask_sum); // filling of outer ring
 
                 //Calculate the new state based on fillings n and m
                 //Smooth state function must be clamped to [0,1] (this is also done by author's implementation!)
@@ -115,31 +114,31 @@ void simulator::simulate()
             //HACK: in case of double buffer, we can already swap, but need to wait until rendering finished
             //HACK: if we use triple buffering, 2 time steps may be calculated before calculation threads start to idle!
             this->new_space_available = true; // prevent renderer from continuing after finishing the current image
-            while(!*this->is_space_drawn_once_by_renderer) {
-            } // wait for renderer...
+            while(!*this->is_space_drawn_once_by_renderer) {} // wait for renderer...
         }
 
-#ifdef ENABLE_PERF_MEASUREMENT
-
-        if(spacetime % 100 == 0)
-        {
-            auto perf_time_end = chrono::high_resolution_clock::now();
-            double perf_time_seconds = chrono::duration<double>(perf_time_end - perf_time_start).count();
-
-            cout << "Simulation || " << (spacetime - perf_spacetime_start) / perf_time_seconds << " calculations / s" << endl;
-
-            perf_spacetime_start = spacetime;
-            perf_time_start = chrono::high_resolution_clock::now();
-        }
-#endif
-
-        //Tell outside (e.g. renderer)
-        space_of_renderer.store(space_current);
+        space_of_renderer.store(space_current); //Tell outside (e.g. renderer)
         *this->is_space_drawn_once_by_renderer = false;
-        this->new_space_available = false; // finish sync
+        this->new_space_available = false;
+        /* NOTE: End of syncro */
+
+        #ifdef ENABLE_PERF_MEASUREMENT
+            // NOTE: this should be done either directly after swapping or here
+            // HACK: here is best - doesn't interrupt code-flow to much :)
+            if(spacetime % 100 == 0)
+            {
+                auto perf_time_end = chrono::high_resolution_clock::now();
+                double perf_time_seconds = chrono::duration<double>(perf_time_end - perf_time_start).count();
+
+                cout << "Simulation || " << (spacetime - perf_spacetime_start) / perf_time_seconds << " calculations / s" << endl;
+
+                perf_spacetime_start = spacetime;
+                perf_time_start = chrono::high_resolution_clock::now();
+            }
+        #endif
     }
 
-#elif SIMULATOR_MODE == MODE_TEST_MASKS
+#if SIMULATOR_MODE == MODE_TEST_MASKS
 
     //Print the two masks
     for(int x = 0; x < inner_mask.getNumCols(); ++x)
@@ -190,7 +189,7 @@ void simulator::simulate()
 #endif
 }
 
-float simulator::filling(cint x, cint y, const vectorized_matrix<float> &mask, cfloat mask_sum)
+float simulator::getFilling(cint x, cint y, const vectorized_matrix<float> &mask, cfloat mask_sum)
 {
     // The theorectically considered bondaries
     cint x_begin = x - mask.getNumRows() / 2;
