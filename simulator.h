@@ -12,15 +12,15 @@
 #include <atomic>
 #include "matrix.h"
 #include "ruleset.h"
+#include "aligned_vector.h"
 
 using namespace std;
-
-#define WAIT_FOR_RENDERING true // if true, calcation threads will be waiting for the renderer to give a finishing signal
 
 #define FIELD_W 300
 #define FIELD_H 200
 
 #define SIMULATOR_MODE MODE_SIMULATE //Set the mode of the simulator
+#define WAIT_FOR_RENDERING true // if true, calcation threads will be waiting for the renderer to give a finishing signal
 
 
 /**
@@ -36,14 +36,14 @@ public:
     const int field_size_y = FIELD_H;
 
     const ruleset rules;
-    atomic<matrix<float>*> space_of_renderer;
+    atomic<vectorized_matrix<float>*> space_of_renderer;
     atomic<bool>* is_space_drawn_once_by_renderer; //TODO: is probably obsolete with MPI, but still still good for testing first!
     atomic<bool> new_space_available;
 
     ulong spacetime = 0;
 
-    matrix<float> outer_mask; // mask to calculate the filling of the outer ring
-    matrix<float> inner_mask; // mask to calculate the filling of the inner cycle
+    vectorized_matrix<float> outer_mask; // mask to calculate the filling of the outer ring
+    vectorized_matrix<float> inner_mask; // mask to calculate the filling of the inner cycle
     float outer_mask_sum;
     float inner_mask_sum;
 
@@ -55,8 +55,8 @@ public:
 
 private:
 
-    matrix<float>* space_current;
-    matrix<float>* space_next;
+    vectorized_matrix<float>* space_current;
+    vectorized_matrix<float>* space_next;
 
     void initialize_field_1()
     {
@@ -234,5 +234,5 @@ private:
      * @param mask_sum the sum of all values in the given matrix (the maximal, obtainable value of this function)
      * @return a float with a value in [0,1]
      */
-    float filling(cint x, cint y, const matrix<float> & mask, cfloat mask_sum);
+    float filling(cint x, cint y, const vectorized_matrix<float> & mask, cfloat mask_sum);
 };

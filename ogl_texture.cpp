@@ -12,7 +12,7 @@ ogl_texture::~ogl_texture()
     free();
 }
 
-bool ogl_texture::loadFromMatrix(matrix<float> * M)
+bool ogl_texture::loadFromMatrix(vectorized_matrix<float> * M)
 {
     // The texture size should be power of two
     cint tex_w = power_of_two(M->getNumCols());

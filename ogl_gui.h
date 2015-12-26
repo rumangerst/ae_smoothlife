@@ -17,7 +17,7 @@ using namespace std;
 class ogl_gui
 {
 public:
-     atomic<matrix<float> *>* space = nullptr;
+     atomic<vectorized_matrix<float> *>* space = nullptr;
      atomic<bool> is_space_drawn_once; //TODO: is probably obsolete with MPI, but still still good for testing first!
      atomic<bool>* new_space_available; // if true, wait for the master simulator to change the current space
      bool * simulator_status = nullptr;

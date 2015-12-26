@@ -1,7 +1,25 @@
+// 26.12 by B: change to aligned vector
 #pragma once
 #include <vector>
 #include <iostream>
 #include <math.h>
+#include "aligned_vector.h"
+
+/*
+ * DONE:
+ * - building of (circular) masks
+ * - capsulation
+ * - alignment to cache line
+ */
+
+/*
+ * TODO: Vectorization
+ * 1. apply alignment tests (function already available)
+ * 2. apply padding, if neccessary
+ *
+ * TODO: circle
+ * 1. smoothing is half done (outer ring needs "trapez" smoothing)
+ */
 
 using namespace std;
 
@@ -55,10 +73,10 @@ template <typename T>
 /**
  * @brief A matrix with row first approach
  */
-class matrix
+class vectorized_matrix
 {
 private:
-    vector<T> M;
+    aligned_vector<T> M;
     int rows;
     int columns;
     int ld;
@@ -67,7 +85,7 @@ public:
     /**
      * @brief creates an empty matrix
      */
-    matrix()
+    vectorized_matrix()
     {
         rows = 0;
         columns = 0;
@@ -79,11 +97,11 @@ public:
      * @param columns number of elements per column
      * @param rows number of rows
      */
-    matrix(int columns, int rows)
+    vectorized_matrix(int columns, int rows)
     {
         int ld = matrix_calculate_ld(columns);
 
-        this->M = vector<T>(ld * rows);
+        this->M = aligned_vector<T>(ld * rows);
         this->rows = rows;
         this->columns = columns;
         this->ld = ld;
@@ -93,9 +111,9 @@ public:
      * @brief creates a deep copy of the given matrix
      * @param copy
      */
-    matrix(const matrix<T> & copy)
+    vectorized_matrix(const vectorized_matrix<T> & copy)
     {
-        M = vector<T>(copy.M);
+        M = aligned_vector<T>(copy.M);
         rows = copy.rows;
         columns = copy.columns;
         ld = copy.ld;
@@ -117,7 +135,7 @@ public:
     // Avanced Access Methods
 
 
-    friend ostream& operator<<(ostream& out, const matrix<T> & m )
+    friend ostream& operator<<(ostream& out, const vectorized_matrix<T> & m )
     {
         for(int y = 0; y < m.columns; ++y)
         {
@@ -178,6 +196,10 @@ public:
         }
     }
 
+    int getNumBytesPerRow() {
+        return sizeof(T)*ld;
+    }
+
     /**
      * @brief Sets the matrix values in a circle around matrix center
      * @param r
@@ -213,10 +235,23 @@ public:
 template <typename T>
 /**
  * @brief return TRUE, if the given matrix is optimized for vectorization
- * @param mat
- * @return
  */
-bool is_vectorized_matrix(matrix<T>& mat) {
-    //TODO: implement this function here
-    return false;
+bool is_vectorized_matrix(vectorized_matrix<T>* mat) {
+
+    if (mat == NULL) {
+        printf("mat is NULL!");
+        return false;
+    }
+
+    if (mat % ALIGNMENT != 0) {
+        printf("mat is not aligned!");
+        return false;
+    }
+
+    if (mat->getNumBytesPerRow()/CACHELINE_SIZE) {
+        printf("leading dimension of mat does not fit to cacheline size!");
+        return false;
+    }
+
+    return true;
 }

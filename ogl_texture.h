@@ -13,7 +13,7 @@ public:
     ogl_texture();
     ~ogl_texture();
 
-    bool loadFromMatrix(matrix<float> * M);
+    bool loadFromMatrix(vectorized_matrix<float> * M);
     bool loadFromPixel(GLfloat *pixels, GLuint width, GLuint height);
     void free();
 

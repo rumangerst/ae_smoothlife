@@ -1,5 +1,20 @@
 ﻿#include "simulator.h"
 
+/*
+ * DONE:
+ * - simulation code correct (synchronized version)
+ */
+
+/*
+ * TODO: Vectorization
+ * 1. optimize access for rows
+ * 2. apply static access to grid
+ * 3. optimize code for border-free simulators
+ * 4. optimize code for border simulators ( as far as possible)
+ *
+ * TODO: Parallization
+ */
+
 simulator::simulator(const ruleset & r) : rules(r)
 {
     new_space_available.store(false);
@@ -18,8 +33,8 @@ void simulator::initialize()
 {
     cout << "Initializing ..." << endl;
 
-    space_current = new matrix<float>(field_size_x, field_size_y);
-    space_next = new matrix<float>(field_size_x, field_size_y);
+    space_current = new vectorized_matrix<float>(field_size_x, field_size_y);
+    space_next = new vectorized_matrix<float>(field_size_x, field_size_y);
     space_of_renderer.store(space_current);
 
     // Initialize masks with smoothing
@@ -35,8 +50,8 @@ void simulator::initialize()
     // Either radius must be decreased by 1 or size increased by 2
     // Decrease radius = Floor integral approx.
     // Increase size = Ceiling integral approx.
-    outer_mask = matrix<float>(rules.ri * 2 + 2, rules.ri * 2 + 2);
-    inner_mask = matrix<float>(rules.ra * 2 + 2, rules.ra * 2 + 2);
+    outer_mask = vectorized_matrix<float>(rules.ri * 2 + 2, rules.ri * 2 + 2);
+    inner_mask = vectorized_matrix<float>(rules.ra * 2 + 2, rules.ra * 2 + 2);
 
     outer_mask.set_circle(rules.ri, 1, true);
     inner_mask.set_circle(rules.ra, 1, true);
@@ -159,7 +174,7 @@ void simulator::simulate()
 #endif
 }
 
-float simulator::filling(cint x, cint y, const matrix<float> &mask, cfloat mask_sum)
+float simulator::filling(cint x, cint y, const vectorized_matrix<float> &mask, cfloat mask_sum)
 {
     // The theorectically considered bondaries
     cint x_begin = x - mask.getNumRows() / 2;
