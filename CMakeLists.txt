@@ -5,7 +5,7 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${ae_smoothlife_SOURCE_DIR}/cmake")
 
 set(VECTORIZER_VERBOSE_FLAGS "-fopt-info-vec-missed -ftree-vectorizer-verbose=5")
 
-set(CMAKE_CXX_FLAGS "-std=c++1y -O2 -pedantic -march=native -Wall -Werror -fopenmp -ftree-vectorize")
+set(CMAKE_CXX_FLAGS "-std=c++1y -O2 -pedantic -march=native -Wall -Werror -fopenmp -ftree-vectorize -DENABLE_PERF_MEASUREMENT")
 #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${VECTORIZER_VERBOSE_FLAGS}")
 
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")

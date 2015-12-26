@@ -19,6 +19,11 @@ bool ogl_gui::allowNextStep() {
 
 void ogl_gui::run()
 {
+#ifdef ENABLE_PERF_MEASUREMENT
+    auto perf_time_start = chrono::high_resolution_clock::now();
+    ulong frames_start = 0;
+#endif
+
     if(init() & load())
     {
         SDL_Event e;
@@ -44,9 +49,20 @@ void ogl_gui::run()
             this->is_space_drawn_once = true;
             while(!this->allowNextStep()) {}
 
-            num_images_rendered++;
-            if (num_images_rendered%100 == 0)
-                cout << "ren: " << num_images_rendered << "\n";
+#ifdef ENABLE_PERF_MEASUREMENT
+            ++frames_rendered;
+            if (frames_rendered%100 == 0)
+            {
+                auto perf_time_end = chrono::high_resolution_clock::now();
+                double perf_time_seconds = chrono::duration<double>(perf_time_end - perf_time_start).count();
+
+                cout << "OpenGL GUI || " << (frames_rendered - frames_start) / perf_time_seconds << " FPS" << endl;
+
+                frames_start = frames_rendered;
+                perf_time_start = chrono::high_resolution_clock::now();
+            }
+
+#endif
             SDL_GL_SwapWindow(window);
         }
     }

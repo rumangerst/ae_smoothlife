@@ -10,6 +10,7 @@
 #include <vector>
 #include <random>
 #include <atomic>
+#include <chrono>
 #include "matrix.h"
 #include "ruleset.h"
 #include "aligned_vector.h"

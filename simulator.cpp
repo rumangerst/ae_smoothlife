@@ -79,6 +79,11 @@ void simulator::simulate()
 
     running = true;
 
+#ifdef ENABLE_PERF_MEASUREMENT
+    auto perf_time_start = chrono::high_resolution_clock::now();
+    ulong perf_spacetime_start = 0;
+#endif
+
     while(running)
     {
         for(int x = 0; x < field_size_x; ++x)
@@ -114,8 +119,19 @@ void simulator::simulate()
             } // wait for renderer...
         }
 
-        if (spacetime%100 == 0)
-            cout << "sim: " << spacetime << "\n";
+#ifdef ENABLE_PERF_MEASUREMENT
+
+        if(spacetime % 100 == 0)
+        {
+            auto perf_time_end = chrono::high_resolution_clock::now();
+            double perf_time_seconds = chrono::duration<double>(perf_time_end - perf_time_start).count();
+
+            cout << "Simulation || " << (spacetime - perf_spacetime_start) / perf_time_seconds << " calculations / s" << endl;
+
+            perf_spacetime_start = spacetime;
+            perf_time_start = chrono::high_resolution_clock::now();
+        }
+#endif
 
         //Tell outside (e.g. renderer)
         space_of_renderer.store(space_current);

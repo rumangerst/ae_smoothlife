@@ -8,6 +8,7 @@
 #include <vector>
 #include <atomic>
 #include <memory>
+#include <chrono>
 #include "simulator.h"
 #include "ogl_shader.h"
 #include "ogl_texture.h"
@@ -22,7 +23,9 @@ public:
      atomic<bool>* new_space_available; // if true, wait for the master simulator to change the current space
      bool * simulator_status = nullptr;
 
-     ulong num_images_rendered = 0; // just for debugging
+#ifdef ENABLE_PERF_MEASUREMENT
+     ulong frames_rendered = 0; // just for debugging
+#endif
 
     ogl_gui();
     ~ogl_gui();
