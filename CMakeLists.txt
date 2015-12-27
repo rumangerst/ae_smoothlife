@@ -3,11 +3,11 @@ project(ae_smoothlife)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${ae_smoothlife_SOURCE_DIR}/cmake")
 
-set(CMAKE_CXX_FLAGS "-std=c++1y -O2 -pedantic -Wall -Werror -DENABLE_PERF_MEASUREMENT")
+set(CMAKE_CXX_FLAGS "-std=c++1y -O3 -pedantic -Wall -DENABLE_PERF_MEASUREMENT")
 
 #gcc compiler version, additional flags
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fopenmp  -march=native -ftree-vectorize")
-#set(VECTORIZER_VERBOSE_FLAGS "-fopt-info-vec-missed -ftree-vectorizer-verbose=5")
+#set(VECTORIZER_VERBOSE_FLAGS "-fopt-info-vec -fopt-info-missed -fdump-tree-vect") #fdrump drops more information in *.vect files
 #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${VECTORIZER_VERBOSE_FLAGS}")
 
 #intel compiler version, additional flags
