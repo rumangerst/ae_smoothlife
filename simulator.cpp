@@ -37,7 +37,7 @@ void simulator::initialize()
     space_next = new vectorized_matrix<float>(field_size_x, field_size_y);
     space_of_renderer.store(space_current);
 
-    // Initialize masks with smoothing
+    // Initialize masks without smoothing
     /*
     outer_mask = matrix<float>(rules.ri * 2, rules.ri * 2);
     inner_mask = matrix<float>(rules.ra * 2, rules.ra * 2);
@@ -46,7 +46,7 @@ void simulator::initialize()
     inner_mask.set_circle(rules.ra, 1, false);
     inner_mask.set_circle(rules.ri, 0, false);*/
 
-    // Initialize masks without smoothing
+    // Initialize masks with smoothing
     // Either radius must be decreased by 1 or size increased by 2
     // Decrease radius = Floor integral approx.
     // Increase size = Ceiling integral approx.
@@ -198,24 +198,36 @@ float simulator::getFilling(cint x, cint y, const vectorized_matrix<float> &mask
     cint y_end = y + mask.getNumRows() / 2;
 
     float f = 0;
+    cint mat_ld = space_current->getLd();
+    cint mask_ld = mask.getLd();
+    const float* const __restrict__ mat_rows = (float*)__builtin_assume_aligned(space_current->getRows(), ALIGNMENT);
+    const float* const __restrict__ mask_rows = (float*)__builtin_assume_aligned(mask.getRows(), ALIGNMENT);
 
     if(x_begin >= 0 && y_begin >= 0 && x_end < field_size_x && y_end < field_size_y)
     {
+        //NOTE: vec: speedup good, 9.7
         // we access points safely here
-        for(int y = y_begin; y < y_end; ++y)
-        {
-            #pragma omp simd
-            for(int x = x_begin; x < x_end; ++x)
-            {
-                f += space_current->getValue(x,y) * mask.getValue(x - x_begin, y - y_begin);
+        for(int y = y_begin; y < y_end; ++y) {
+            //cint Y = y;
+            //cint Y_BEG = y-y_begin;
+            cint Y = y*mat_ld;
+            cint Y_BEG = (y-y_begin)*mask_ld;
+            #pragma omp simd aligned(mat_rows, mask_rows:64)
+            //#pragma vector aligned
+            for(int x = x_begin; x < x_end; ++x) {
+                //f += space_current->getValue(x,Y) * mask.getValue(x - x_begin, Y_BEG);
+                f += mat_rows[x + Y] * mask_rows[(x-x_begin) + Y_BEG];
             }
         }
     }
     else
     {
+	//TODO: vec: speedup bad, 1.29
         // we access points "over" the edges of the grid here
         for(int y = y_begin; y < y_end; ++y)
         {
+	    #pragma omp simd
+        #pragma vector aligned
             for(int x = x_begin; x < x_end; ++x)
             {
                 f += space_current->getValueWrapped(x,y) * mask.getValue(x - x_begin, y - y_begin);

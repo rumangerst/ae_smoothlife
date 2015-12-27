@@ -121,19 +121,39 @@ public:
 
     // Getter and Setter methods
 
-    T getValue(cint x, cint y) const { return M[matrix_index(x,y,ld)]; }
-    T getValueWrapped(cint x, cint y) const { return M[matrix_index_wrapped(x,y,columns,rows,ld)]; }
+    T getValue(cint x, cint y) const {
+      #pragma vector aligned	// needed for vectorization
+      return M[matrix_index(x,y,ld)]; 
+    }
 
-    void setValue(T val, cint x, cint y) { M[matrix_index(x,y,ld)] = val; }
-    void setValueWrapped(T val, cint x, cint y) { M[matrix_index_wrapped(x,y,columns,rows,ld)] = val; }
+    T getValueWrapped(cint x, cint y) const {
+      #pragma vector aligned	// needed for vectorization
+      return M[matrix_index_wrapped(x,y,columns,rows,ld)];
+    }
+
+    void setValue(T val, cint x, cint y) { 
+      #pragma vector aligned
+      M[matrix_index(x,y,ld)] = val; 
+    }
+    
+    void setValueWrapped(T val, cint x, cint y) { 
+      #pragma vector aligned
+      M[matrix_index_wrapped(x,y,columns,rows,ld)] = val; 
+    }
     //TODO: setValueWrapped with dim? Should be avoided, i guess
 
     int getLd() const { return this->ld; }
     int getNumRows() const { return this->rows; }
     int getNumCols() const { return this->columns; }
 
-    // Avanced Access Methods
+    /*
+     * only as last resort for gc...!
+     */
+    const T* getRows() const {
+        return M.data();
+    }
 
+    // Avanced Access Methods
 
     friend ostream& operator<<(ostream& out, const vectorized_matrix<T> & m )
     {
@@ -216,9 +236,9 @@ public:
      * @brief sum Calculates the sum of values
      * @return
      */
-    double sum()
+    float sum()
     {
-        double s = 0;
+        float s = 0;
 
         for(int i = 0; i < columns; ++i)
         {
