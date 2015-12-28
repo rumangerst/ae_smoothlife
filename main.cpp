@@ -1,6 +1,7 @@
 #include <iostream>
 #include <math.h>
 #include <vector>
+#include <omp.h>
 #include <memory>
 
 // If this exe is a simulator, use simulator class
@@ -61,6 +62,7 @@ int main()
 
     #pragma omp parallel
     {
+        printf("OMP: Number of threads available: %i\n", omp_get_max_threads());
         #pragma omp single nowait
         g.run();
 

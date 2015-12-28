@@ -11,6 +11,7 @@
  * - capsulation
  * - alignment to cache line
  * - padded to fit cacheline size
+ * - vectorized sum()
  */
 
 /*
@@ -76,7 +77,7 @@ template <typename T>
 class vectorized_matrix
 {
 private:
-    aligned_vector<T> M;
+    aligned_vector<T> M __attribute__((aligned(64)));
     int rows;
     int columns;
     int ld;
@@ -188,11 +189,6 @@ public:
 
                 cdouble d = sqrt((local_x-center_x)*(local_x-center_x) + (local_y-center_y)*(local_y-center_y));
 
-                /*if(d <= r)
-                {
-                    M[matrix_index(i,j,ld)] = v;
-                }*/
-
                 if(d <= r)
                 {
                     // The point is in radius. No further actions needed
@@ -229,15 +225,15 @@ public:
      * @brief sum Calculates the sum of values
      * @return
      */
-    float sum()
-    {
+    float sum() {
         float s = 0;
 
-        for(int i = 0; i < columns; ++i)
-        {
-            for(int j = 0; j < rows; ++j)
-            {
-                s += M[matrix_index(i,j,ld)];
+        for(int i = 0; i < columns; ++i) {
+            cint I = i*ld;
+            #pragma omp simd
+            #pragma vector aligned
+            for(int j = 0; j < rows; ++j) {
+                s += M[j + I];
             }
         }
 
