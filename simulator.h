@@ -33,8 +33,8 @@ public:
     simulator(const ruleset & rules);
     ~simulator();
 
-    const int field_size_x = FIELD_W;
-    const int field_size_y = FIELD_H;
+    const int field_width = FIELD_W;
+    const int field_height = FIELD_H;
 
     const ruleset rules;
     atomic<vectorized_matrix<float>*> space_of_renderer;
@@ -61,9 +61,9 @@ private:
 
     void initialize_field_1()
     {
-        for(int x = 0; x < field_size_x; ++x)
+        for(int x = 0; x < field_width; ++x)
         {
-            for(int y = 0; y < field_size_y; ++y)
+            for(int y = 0; y < field_height; ++y)
             {
                 space_current->setValue(1,x,y);
             }
@@ -76,9 +76,9 @@ private:
         default_random_engine re(rd());
         uniform_real_distribution<float> random_state(0,1);
 
-        for(int x = 0; x < field_size_x; ++x)
+        for(int x = 0; x < field_width; ++x)
         {
-            for(int y = 0; y < field_size_y; ++y)
+            for(int y = 0; y < field_height; ++y)
             {
                 space_current->setValue(random_state(re),x,y);
             }
@@ -94,15 +94,15 @@ private:
         default_random_engine re(rd());
 
         uniform_real_distribution<float> random_idk(0,0.5);
-        uniform_real_distribution<float> random_point_x(0,field_size_x);
-        uniform_real_distribution<float> random_point_y(0,field_size_y);
+        uniform_real_distribution<float> random_point_x(0,field_width);
+        uniform_real_distribution<float> random_point_y(0,field_height);
 
         float mx, my;
 
-        mx = 2*rules.ra; if (mx>field_size_x) mx=field_size_x;
-        my = 2*rules.ra; if (my>field_size_y) my=field_size_y;
+        mx = 2*rules.ra; if (mx>field_width) mx=field_width;
+        my = 2*rules.ra; if (my>field_height) my=field_height;
 
-        for(int t=0; t<=(int)(field_size_x*field_size_y/(mx*my)); ++t)
+        for(int t=0; t<=(int)(field_width*field_height/(mx*my)); ++t)
         {
             float mx, my, dx, dy, u, l;
             int ix, iy;
@@ -121,11 +121,11 @@ private:
                     {
                         int px = ix;
                         int py = iy;
-                        while (px<  0) px+=field_size_x;
-                        while (px>=field_size_x) px-=field_size_x;
-                        while (py<  0) py+=field_size_y;
-                        while (py>=field_size_y) py-=field_size_y;
-                        if (px>=0 && px<field_size_x && py>=0 && py<field_size_y)
+                        while (px<  0) px+=field_width;
+                        while (px>=field_width) px-=field_width;
+                        while (py<  0) py+=field_height;
+                        while (py>=field_height) py-=field_height;
+                        if (px>=0 && px<field_width && py>=0 && py<field_height)
                         {
                             space_current->setValue(1.0,px,py);
                         }
@@ -145,9 +145,9 @@ private:
         const float p_proagate = 0.3;
 
         //Seed
-        for(int x = 0; x < field_size_x; ++x)
+        for(int x = 0; x < field_width; ++x)
         {
-            for(int y = 0; y < field_size_y; ++y)
+            for(int y = 0; y < field_height; ++y)
             {
                 space_current->setValue(random_state(re) <= p_seed ? 1 : 0, x,y);
             }
@@ -156,9 +156,9 @@ private:
         //Propagate
         for(int i = 0; i < 5; ++i)
         {
-            for(int x = 0; x < field_size_x; ++x)
+            for(int x = 0; x < field_width; ++x)
             {
-                for(int y = 0; y < field_size_y; ++y)
+                for(int y = 0; y < field_height; ++y)
                 {
                     float f = space_current->getValue(x,y);
 
@@ -236,4 +236,15 @@ private:
      * @return a float with a value in [0,1]
      */
     float getFilling(cint x, cint y, const vectorized_matrix<float> & mask, cfloat mask_sum);
+
+    /**
+     * @brief calculates the area around the point (x,y) based on the mask & normalizes it by mask_sum
+     * USEFUL FOR TESTING THE CORRECTNIS OF OPTIMIZED CODE! KEEP THIS!
+     * @param x
+     * @param y
+     * @param mask a non-sparsed matrix with target set [0,1]
+     * @param mask_sum the sum of all values in the given matrix (the maximal, obtainable value of this function)
+     * @return a float with a value in [0,1]
+     */
+    float getFilling_unoptimized(cint x, cint y, const vectorized_matrix<float> & mask, cfloat mask_sum);
 };
