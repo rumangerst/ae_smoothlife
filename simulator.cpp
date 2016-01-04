@@ -53,9 +53,9 @@ void simulator::initialize()
     outer_mask = vectorized_matrix<float>(rules.ri * 2 + 2, rules.ri * 2 + 2);
     inner_mask = vectorized_matrix<float>(rules.ra * 2 + 2, rules.ra * 2 + 2);
 
-    outer_mask.set_circle(rules.ri, 1, true);
-    inner_mask.set_circle(rules.ra, 1, true);
-    inner_mask.set_circle(rules.ri, 0, true);
+    outer_mask.set_circle(rules.ri, 1, 1);
+    inner_mask.set_circle(rules.ra, 1, 1);
+    inner_mask.set_circle(rules.ri, 0, 1);
 
     outer_mask_sum = outer_mask.sum();
     inner_mask_sum = inner_mask.sum();

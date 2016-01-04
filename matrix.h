@@ -169,38 +169,34 @@ public:
      * @param y y coordinate (double). The center y of the matrix is rows / 2.0
      * @param r radius of the circle
      * @param v the value the elements in the circle should be set to.
-     * @param smooth smooth the circle. To prevent cutting it off, increase width by 2 or decrease radius by 1
+     * @param smooth_factor smooth the circle. Set it to 0 to disable smoothing. Will increase radius of the circle by this value
      */
-    void set_circle(cdouble center_x, cdouble center_y, cdouble r, const T v, const bool smooth)
+    void set_circle(cdouble center_x, cdouble center_y, cdouble r, const T v, cdouble smooth_factor)
     {
         for(int i = 0; i < columns; ++i)
         {
             for(int j = 0; j < rows; ++j)
             {
-                /*cdouble s_sq = (i-x)*(i-x) + (j-y)*(j-y);
-
-                if(s_sq <= r*r)
-                {
-                    M[matrix_index(i,j,ld)] = v;
-                }*/
-
                 cdouble local_x = i + 0.5;
                 cdouble local_y = j + 0.5;
-
-                cdouble d = sqrt((local_x-center_x)*(local_x-center_x) + (local_y-center_y)*(local_y-center_y));
-
-                if(d <= r)
-                {
-                    // The point is in radius. No further actions needed
-                    M[matrix_index(i,j,ld)] = v;
-                }
-                else if( smooth && floor(d) <= r)
-                {
-                    //Distance between next point in circle and the point outside circle
-                    cdouble d_tf = d - floor(d);
-
-                    M[matrix_index(i,j,ld)] = abs(v - d_tf); //Works.
-                }
+		
+		cdouble d = sqrt((local_x-center_x)*(local_x-center_x) + (local_y-center_y)*(local_y-center_y));
+		
+		/*
+		 * Calculate the interpolation weight with 
+		 * 
+		 * w(d) = max(0, min(1, (-d + r + bb) / bb))
+		 * 
+		 * We calcuate this with d (distance from center point). 
+		 * The author of reference SmoothLife implementation does exactly the same, but in an other way
+		 */
+		
+		cdouble w = smooth_factor <= 0 ? ( d <= r ? 1.0 : 0.0 ) : 1.0 / smooth_factor * (-d + r + smooth_factor);
+		cdouble weight = fmax(0, fmin(1, w));
+		T src_value = getValue(i,j);
+		T dst_value = src_value * (1.0 - weight) + v * weight;
+		
+		setValue(dst_value, i, j);
             }
         }
     }
@@ -214,11 +210,11 @@ public:
      * @brief Sets the matrix values in a circle around matrix center
      * @param r
      * @param v
-     * @param smooth smooth the circle. To prevent cutting it off, increase width by 2 or decrease radius by 1
+     * @param smooth Will increase radius of the circle by this value
      */
-    void set_circle(cdouble r, const T v, const bool smooth)
+    void set_circle(cdouble r, const T v, cdouble smooth_factor)
     {
-        set_circle(columns / 2.0, rows / 2.0, r, v, smooth);
+        set_circle(columns / 2.0, rows / 2.0, r, v, smooth_factor);
     }
 
     /**
