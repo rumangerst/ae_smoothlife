@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.0)
 project(ae_smoothlife)    
 
 OPTION(BUILD_INTEL "Build with intel compiler" OFF)
+OPTION(GCC_VERBOSE_VECTOR "Show complete GCC vector report" OFF)
+
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${ae_smoothlife_SOURCE_DIR}/cmake")
 set(CMAKE_CXX_FLAGS "-std=c++1y -O3 -pedantic -Wall -DENABLE_PERF_MEASUREMENT")
 
@@ -11,8 +13,11 @@ IF (BUILD_INTEL)
 ELSE(BUILD_INTEL)
   #gcc compiler version, additional flags
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fopenmp  -march=native -ftree-vectorize")
-  set(VECTORIZER_VERBOSE_FLAGS "-fopt-info-vec -fopt-info-missed -fdump-tree-vect") #fdrump drops more information in *.vect files
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${VECTORIZER_VERBOSE_FLAGS}")
+  
+  IF(GCC_VERBOSE_VECTOR)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fopt-info-vec -fopt-info-missed -fdump-tree-vect")#fdrump drops more information in *.vect files
+  ENDIF()
+  
 ENDIF(BUILD_INTEL)
 
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
@@ -29,7 +34,7 @@ ruleset.h
 mpi_manager.h)
 
 set(SOURCES_GUI
-gui.cpp
+sdl_gui.cpp
 ogl_gui.cpp
 ogl_shader_variable.h
 ogl_shader.cpp

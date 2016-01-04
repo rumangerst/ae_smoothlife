@@ -65,84 +65,7 @@ void simulator::initialize()
     //initialize_field_random();
     //initialize_field_1();
      initialize_field_splat();
-#endif
-
-    initialized = true;
-}
-
-void simulator::simulate()
-{
-    cout << "Running ..." << endl;
-
-
-    if (SIMULATOR_MODE == MODE_SIMULATE) //changed because it was extremely hard to read with that kind of set up
-        running = true;
-
-    #ifdef ENABLE_PERF_MEASUREMENT
-        auto perf_time_start = chrono::high_resolution_clock::now();
-        ulong perf_spacetime_start = 0;
-    #endif
-
-    #pragma omp parallel
-    {
-        while(running)
-        {
-            #pragma omp parallel for schedule(static,1)
-            for(int x = 0; x < field_width; ++x)
-            {
-                for(int y = 0; y < field_height; ++y)
-                {
-                    cfloat n = getFilling(x, y, inner_mask, inner_mask_sum); // filling of inner circle
-                    cfloat m = getFilling(x, y, outer_mask, outer_mask_sum); // filling of outer ring
-
-                    //Calculate the new state based on fillings n and m
-                    //Smooth state function must be clamped to [0,1] (this is also done by author's implementation!)
-                    space_next->setValue(rules.discrete ? discrete_state_func_1(n,m) : fmax(0,fmin(1,next_step_as_euler(x,y,n,m))), x,y);
-
-                }
-            }
-
-            //Swap fields
-            std::swap(space_current, space_next);
-            ++spacetime;
-
-            /*
-             * NOTE: Start of synchronization
-             * - the master simulator (and all others) waits for the renderer to finish drawing the last image
-             * - it then blocks the renderer from continuing until "space_current" has been passed over
-             * - HACK: deep copy would make it so much simpler :o
-             */
-            if (WAIT_FOR_RENDERING) {
-                //TODO: may catch a signal from MPI (from the renderer) in the future & only the gui machine has to do that
-                //HACK: in case of double buffer, we can already swap, but need to wait until rendering finished
-                //HACK: if we use triple buffering, 2 time steps may be calculated before calculation threads start to idle!
-                this->new_space_available = true; // prevent renderer from continuing after finishing the current image
-                while(!*this->is_space_drawn_once_by_renderer) {} // wait for renderer...
-            }
-
-            space_of_renderer.store(space_current); //Tell outside (e.g. renderer)
-            *this->is_space_drawn_once_by_renderer = false;
-            this->new_space_available = false;
-            /* NOTE: End of syncro */
-
-            #ifdef ENABLE_PERF_MEASUREMENT
-                // NOTE: this should be done either directly after swapping or here
-                // HACK: here is best - doesn't interrupt code-flow to much :)
-                if(spacetime % 100 == 0)
-                {
-                    auto perf_time_end = chrono::high_resolution_clock::now();
-                    double perf_time_seconds = chrono::duration<double>(perf_time_end - perf_time_start).count();
-
-                    cout << "Simulation || " << (spacetime - perf_spacetime_start) / perf_time_seconds << " calculations / s" << endl;
-
-                    perf_spacetime_start = spacetime;
-                    perf_time_start = chrono::high_resolution_clock::now();
-                }
-            #endif
-        }
-    }
-
-#if SIMULATOR_MODE == MODE_TEST_MASKS
+#elif SIMULATOR_MODE == MODE_TEST_MASKS
 
     //Print the two masks
     for(int x = 0; x < inner_mask.getNumCols(); ++x)
@@ -191,6 +114,87 @@ void simulator::simulate()
     }
 
 #endif
+
+    initialized = true;
+}
+
+void simulator::simulate_step()
+{
+  #pragma omp parallel for schedule(static,1)
+  for(int x = 0; x < field_width; ++x)
+  {
+      for(int y = 0; y < field_height; ++y)
+      {
+	  cfloat n = getFilling(x, y, inner_mask, inner_mask_sum); // filling of inner circle
+	  cfloat m = getFilling(x, y, outer_mask, outer_mask_sum); // filling of outer ring
+
+	  //Calculate the new state based on fillings n and m
+	  //Smooth state function must be clamped to [0,1] (this is also done by author's implementation!)
+	  space_next->setValue(rules.discrete ? discrete_state_func_1(n,m) : fmax(0,fmin(1,next_step_as_euler(x,y,n,m))), x,y);
+
+      }
+  }
+
+  //Swap fields
+  std::swap(space_current, space_next);
+  ++spacetime;
+}
+
+
+void simulator::run_simulation_master()
+{
+    cout << "Running ..." << endl;
+    running = true;
+
+    #ifdef ENABLE_PERF_MEASUREMENT
+        auto perf_time_start = chrono::high_resolution_clock::now();
+        ulong perf_spacetime_start = 0;
+    #endif
+
+    #pragma omp parallel
+    {
+        while(running)
+        {     
+	    // Calculate the next state if simulation is enabled
+	    // Separate the actual simulation from interfacing
+	    if(SIMULATOR_MODE == MODE_SIMULATE)
+	      simulate_step();
+
+            /*
+             * NOTE: Start of synchronization
+             * - the master simulator (and all others) waits for the renderer to finish drawing the last image
+             * - it then blocks the renderer from continuing until "space_current" has been passed over
+             * - HACK: deep copy would make it so much simpler :o
+             */
+            if (WAIT_FOR_RENDERING) {
+                //TODO: may catch a signal from MPI (from the renderer) in the future & only the gui machine has to do that
+                //HACK: in case of double buffer, we can already swap, but need to wait until rendering finished
+                //HACK: if we use triple buffering, 2 time steps may be calculated before calculation threads start to idle!
+                this->new_space_available = true; // prevent renderer from continuing after finishing the current image
+                while(!*this->is_space_drawn_once_by_renderer && running) {} // wait for renderer... !!! always add check for "running"
+            }
+
+            space_of_renderer.store(space_current); //Tell outside (e.g. renderer)
+            *this->is_space_drawn_once_by_renderer = false;
+            this->new_space_available = false;
+            /* NOTE: End of syncro */
+
+            #ifdef ENABLE_PERF_MEASUREMENT
+                // NOTE: this should be done either directly after swapping or here
+                // HACK: here is best - doesn't interrupt code-flow to much :)
+                if(spacetime % 100 == 0)
+                {
+                    auto perf_time_end = chrono::high_resolution_clock::now();
+                    double perf_time_seconds = chrono::duration<double>(perf_time_end - perf_time_start).count();
+
+                    cout << "Simulation || " << (spacetime - perf_spacetime_start) / perf_time_seconds << " calculations / s" << endl;
+
+                    perf_spacetime_start = spacetime;
+                    perf_time_start = chrono::high_resolution_clock::now();
+                }
+            #endif
+        }
+    }
 }
 
 float simulator::getFilling(cint at_x, cint at_y, const vectorized_matrix<float> &mask, cfloat mask_sum)

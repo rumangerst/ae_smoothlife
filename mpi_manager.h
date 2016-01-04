@@ -1,5 +1,5 @@
 #pragma once
-#include <mpi/mpi.h>
+#include <mpi.h>
 
 /**
  * @brief RAII implementation of MPI
@@ -8,24 +8,30 @@
 class mpi_manager
 {
 public:
-
+  
+  enum mpi_role
+  {
     /**
      * @brief This MPI instance has no role
      */
-    static uint ROLE_NONE = 0;
-    /**
-     * @brief This MPI instance is a simulator, sends data to the MASTER simulator
-     */
-    static uint ROLE_SIMULATOR_SLAVE = 1;
-    /**
-     * @brief This MPI instance is a simulator, collects all calculated data from the SLAVE simulators
-     */
-    static uint ROLE_SIMULATOR_MASTER = 2;
+    NONE = 0,
+    
     /**
      * @brief This MPI instance gets obtains the data from the MASTER simulator
      */
-    static uint ROLE_COLLECTOR = 3;
-
+    USER_INTERFACE = 1,
+    
+    /**
+     * @brief This MPI instance is a simulator, collects all calculated data from the SLAVE simulators
+     */
+    SIMULATOR_MASTER = 2,
+    
+    /**
+     * @brief This MPI instance is a simulator, sends data to the MASTER simulator
+     */
+    SIMULATOR_SLAVE = 3 
+    
+  };
 
     mpi_manager(int argc, char** argv)
     {
@@ -49,6 +55,11 @@ public:
         MPI_Comm_rank(MPI_COMM_WORLD, &r);
         return r;
     }
+    
+    mpi_role role()
+    {
+      return role_of(rank());
+    }
 
     /**
      * @brief Returns the role of the given MPI rank
@@ -56,14 +67,14 @@ public:
      * @author Ruman
      * @return
      */
-    uint role_of(int mpi_comm_rank)
+    mpi_role role_of(int mpi_comm_rank)
     {
         if(mpi_comm_rank == 0)
-            return ROLE_COLLECTOR;
+            return mpi_role::USER_INTERFACE;
         else if(mpi_comm_rank == 1)
-            return ROLE_SIMULATOR_MASTER;
+            return mpi_role::SIMULATOR_MASTER;
         else
-            return ROLE_SIMULATOR_SLAVE;
+            return mpi_role::SIMULATOR_SLAVE;
     }
 
     /**
@@ -71,11 +82,11 @@ public:
      * @param role
      * @return the comm rank >= 0, -1 if there are more than 1 theoretically possible ranks
      */
-    int rank_with_role(uint role)
+    int rank_with_role(mpi_role role)
     {
-        if(role == ROLE_COLLECTOR)
+        if(role == mpi_role::USER_INTERFACE)
             return 0;
-        else if(role == ROLE_SIMULATOR_MASTER)
+        else if(role == mpi_role::SIMULATOR_SLAVE)
             return 1;
         else
             return -1;

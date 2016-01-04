@@ -3,6 +3,8 @@
 #include <vector>
 #include <omp.h>
 #include <memory>
+#include <exception>
+#include "mpi_manager.h"
 
 // If this exe is a simulator, use simulator class
 // otherwise only include matrix
@@ -14,30 +16,52 @@
 
 // Include the GUI headers if this is the GUI
 #ifdef GUI
-#include "gui.h"
+#include "sdl_gui.h"
 #include "ogl_gui.h"
 #endif
 
 using namespace std;
 
-#define SDL_GUI false
+#define GUI_TYPE ogl_gui
 #define RULESET ruleset_smooth_life_l
 
 #if !defined(GUI) && defined(SIM)
-int main()
+int main(int argc, char ** argv)
 {
-    //TODO: Implement
-    cerr << "Implement main_sim" << endl;
-    return -1;
+    try
+    {
+      mpi_manager mpi(argc, argv);
+      
+      cout << "Role:" << mpi.role() << endl;
+    }
+    catch(exception ex)
+    {
+      cerr << "Error: " << ex.what() << endl;
+      
+      return -1;
+    }
+    
+    return 0;
 }
 #endif
 
 #if defined(GUI) && !defined(SIM)
-int main()
+int main(int argc, char ** argv)
 {
-    //TODO: Implement
-    cerr << "Implement main_gui" << endl;
-    return -1;
+    try
+    {
+      mpi_manager mpi(argc, argv);
+      
+      cout << "Role:" << mpi.role() << endl;
+    }
+    catch(exception ex)
+    {
+      cerr << "Error: " << ex.what() << endl;
+      
+      return -1;
+    }
+    
+    return 0;
 }
 #endif
 
@@ -49,25 +73,16 @@ int main()
     simulator s(rules);
     s.initialize();
 
-#if SDL_GUI == true
-    gui g;
-#else
-    ogl_gui g;
-#endif
-
-    g.simulator_status = &s.running;
-    g.space = &s.space_of_renderer;
-    s.is_space_drawn_once_by_renderer = &g.is_space_drawn_once;
-    g.new_space_available = &s.new_space_available;
-
+    GUI_TYPE g;
+    
     #pragma omp parallel
     {
         printf("OMP: Number of threads available: %i\n", omp_get_max_threads());
         #pragma omp single nowait
-        g.run();
+        g.run_local(&s);
 
         #pragma omp single nowait
-        s.simulate();
+        s.run_simulation_master();
     }
 
     return 0;

@@ -51,8 +51,26 @@ public:
     bool initialized = false;
     bool running = false;
 
+    /**
+     * @brief Initializes all necessary fields
+     */
     void initialize();
-    void simulate();
+    
+    /**
+     * @brief Simulates 1 (or dt) steps
+     * @note Public because we'll need this for our tests
+     */
+    void simulate_step();
+    
+    /**
+     * @brief Runs the simulation including interface with GUI as master simulator
+     */
+    void run_simulation_master();
+    
+    /**
+     * @brief Runs the simulation including interface with master simulator as slave simulator
+     */
+    void run_simulation_slave();
 
 private:
 

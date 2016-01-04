@@ -9,38 +9,26 @@
 #include <atomic>
 #include <memory>
 #include <chrono>
+#include "gui.h"
 #include "simulator.h"
 #include "ogl_shader.h"
 #include "ogl_texture.h"
 
 using namespace std;
 
-class ogl_gui
+class ogl_gui : public gui
 {
-public:
-     atomic<vectorized_matrix<float> *>* space = nullptr;
-     atomic<bool> is_space_drawn_once; //TODO: is probably obsolete with MPI, but still still good for testing first!
-     atomic<bool>* new_space_available; // if true, wait for the master simulator to change the current space
-     bool * simulator_status = nullptr;
-
-#ifdef ENABLE_PERF_MEASUREMENT
-     ulong frames_rendered = 0; // just for debugging
-#endif
+public:  
 
     ogl_gui();
-    ~ogl_gui();
-
-    /**
-     * @brief runs an (in)finite loop for the opengl rederer
-     */
-    void run();
-
-    /**
-     * @brief checks whether or not a new image should be processed (imo)
-     * @return TRUE for asynchronize rendering or certain properties
-     */
-    bool allowNextStep();
-
+    ~ogl_gui() override;
+    
+protected:
+  
+  bool initialize() override;
+  void update( bool& running ) override;
+  void render() override;
+   
 private:
 
     SDL_Window * window = nullptr;
@@ -54,8 +42,8 @@ private:
     int current_shader = -1;
 
     ogl_texture space_texture;
-
-    bool init();
+   
+    bool initSDL();
     bool initGL();
 
     bool load();
@@ -63,8 +51,7 @@ private:
     bool load_shaders();
 
     void update_gl();
-
-    void render();
+  
 
     void print_sdl_error(const char * msg)
     {
@@ -93,7 +80,5 @@ private:
 
     void switch_shader(int shader_index);
     void switch_shader();
-
-    void handle_events(SDL_Event e);
 
 };
