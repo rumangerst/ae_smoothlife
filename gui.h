@@ -52,6 +52,21 @@ public:
             {
                 render();            
                 is_space_drawn_once.store(true);
+                
+/*#ifdef ENABLE_PERF_MEASUREMENT
+                ++frames_rendered;
+                if ( frames_rendered%100 == 0 ) 
+                {
+                    auto perf_time_end = chrono::high_resolution_clock::now();
+                    double perf_time_seconds = chrono::duration<double> ( perf_time_end - perf_time_start ).count();
+
+                    cout << "GUI || " << ( frames_rendered - frames_start ) / perf_time_seconds << " FPS" << endl;
+
+                    frames_start = frames_rendered;
+                    perf_time_start = chrono::high_resolution_clock::now();
+                }
+
+#endif*/
             }
         }
         
@@ -59,21 +74,6 @@ public:
         
         // End simulator when GUI exits
         sim->running = false;
-
-#ifdef ENABLE_PERF_MEASUREMENT
-        ++frames_rendered;
-        if ( frames_rendered%100 == 0 ) 
-        {
-            auto perf_time_end = chrono::high_resolution_clock::now();
-            double perf_time_seconds = chrono::duration<double> ( perf_time_end - perf_time_start ).count();
-
-            cout << "OpenGL GUI || " << ( frames_rendered - frames_start ) / perf_time_seconds << " FPS" << endl;
-
-            frames_start = frames_rendered;
-            perf_time_start = chrono::high_resolution_clock::now();
-        }
-
-#endif
     }
 
     /*

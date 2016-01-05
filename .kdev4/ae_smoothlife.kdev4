@@ -1,0 +1,62 @@
+[Buildset]
+BuildItems=@Variant(\x00\x00\x00\t\x00\x00\x00\x00\x01\x00\x00\x00\x0b\x00\x00\x00\x00\x01\x00\x00\x00\x1a\x00a\x00e\x00_\x00s\x00m\x00o\x00o\x00t\x00h\x00l\x00i\x00f\x00e)
+
+[CMake]
+Build Directory Count=1
+Current Build Directory Index=0
+ProjectRootRelative=./
+
+[CMake][CMake Build Directory 0]
+Build Directory Path=file:///home/ruman/Project/ae_smoothlife/build
+Build Type=
+CMake Binary=file:///usr/bin/cmake
+Environment Profile=
+Extra Arguments=
+Install Directory=file:///usr/local
+
+[Defines And Includes][Compiler]
+Name=GCC
+Path=gcc
+Type=GCC
+
+[Launch]
+Launch Configurations=Launch Configuration 0,Launch Configuration 1
+
+[Launch][Launch Configuration 0]
+Configured Launch Modes=execute
+Configured Launchers=nativeAppLauncher
+Name=smoothlife_local
+Type=Native Application
+
+[Launch][Launch Configuration 0][Data]
+Arguments=
+Dependencies=@Variant(\x00\x00\x00\t\x00\x00\x00\x00\x00)
+Dependency Action=Nothing
+EnvironmentGroup=
+Executable=file:///home/ruman/Project/ae_smoothlife/
+External Terminal=konsole --noclose --workdir %workdir -e %exe
+Project Target=ae_smoothlife,smoothlife_local
+Use External Terminal=false
+Working Directory=
+isExecutable=false
+
+[Launch][Launch Configuration 1]
+Configured Launch Modes=execute
+Configured Launchers=nativeAppLauncher
+Name=MPI run
+Type=Native Application
+
+[Launch][Launch Configuration 1][Data]
+Arguments=-np 1  /home/ruman/Project/ae_smoothlife/build/smoothlife_ui : 1 /home/ruman/Project/ae_smoothlife/build/smoothlife_sim
+Dependencies=@Variant(\x00\x00\x00\t\x00\x00\x00\x00\x00)
+Dependency Action=Nothing
+EnvironmentGroup=
+Executable=file:///usr/bin/mpirun
+External Terminal=konsole --noclose --workdir %workdir -e %exe
+Project Target=ae_smoothlife,smoothlife_ui
+Use External Terminal=false
+Working Directory=
+isExecutable=true
+
+[Project]
+VersionControlSupport=kdevgit
