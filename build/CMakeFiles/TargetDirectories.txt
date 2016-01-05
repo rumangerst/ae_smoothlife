@@ -1,3 +1,0 @@
-/home/ruman/Project/ae_smoothlife/build/CMakeFiles/smoothlife_local.dir
-/home/ruman/Project/ae_smoothlife/build/CMakeFiles/smoothlife_ui.dir
-/home/ruman/Project/ae_smoothlife/build/CMakeFiles/smoothlife_sim.dir

@@ -1,1 +1,0 @@
-/opt/intel/composerxe/linux/mpi/intel64/bin/mpiicpc   -std=c++1y -O3 -pedantic -Wall -DENABLE_PERF_MEASUREMENT -qopenmp -xhost -vec-report=5   CMakeFiles/smoothlife_sim.dir/main.cpp.o CMakeFiles/smoothlife_sim.dir/simulator.cpp.o  -o smoothlife_sim -rdynamic 
