@@ -22,7 +22,6 @@
 
 using namespace std;
 
-#define GUI_TYPE ogl_gui
 #define RULESET ruleset_smooth_life_l
 
 #if !defined(GUI) && defined(SIM)

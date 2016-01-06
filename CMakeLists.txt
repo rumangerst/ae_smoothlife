@@ -4,6 +4,7 @@ project(ae_smoothlife)
 OPTION(BUILD_INTEL "Build with intel compiler" OFF)
 OPTION(BUILD_MIC "Also build MIC version" OFF)
 OPTION(GCC_VERBOSE_VECTOR "Show complete GCC vector report" OFF)
+OPTION(GUI_SDL "Use SDL GUI instead of OpenGL" ON)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${ae_smoothlife_SOURCE_DIR}/cmake")
 set(CMAKE_CXX_FLAGS "-std=c++1y -O3 -pedantic -Wall -DENABLE_PERF_MEASUREMENT")
@@ -60,6 +61,18 @@ include_directories(${SDL2_INCLUDE_DIR})
 find_package(Boost 1.59.0 REQUIRED)
 include_directories(${Boost_INCLUDE_DIRS})
 
+# Add support for GUI
+
+if(GUI_SDL)
+	set(GUI_TYPE "sdl_gui")
+	message("Compile GUI with SDL")
+else()
+	set(GUI_TYPE "ogl_gui")
+	message("Compile GUI with OpenGL 2.0 and fancy stuff")
+endif()
+
+message("GUI_TYPE is ${GUI_TYPE}")
+
 # Three executables:
 # smoothlife_sim: Simulator only, no graphics
 # smoothlife_sim.mic: Simulator only, no graphics, compiled for MIC (intel only)
@@ -78,9 +91,9 @@ endif()
 # smoothlife_sim gets #ifdef SIM
 set_target_properties(smoothlife_sim PROPERTIES COMPILE_FLAGS "-DSIM")
 target_link_libraries(smoothlife_sim ${Boost_LIBRARIES})
-set_target_properties(smoothlife_ui PROPERTIES COMPILE_FLAGS "-DGUI")
+set_target_properties(smoothlife_ui PROPERTIES COMPILE_FLAGS "-DGUI -DGUI_TYPE=${GUI_TYPE}")
 target_link_libraries(smoothlife_ui ${SDL2_LIBRARY} ${OPENGL_gl_LIBRARY} ${OPENGL_glu_LIBRARY} ${GLEW_LIBRARIES})
-set_target_properties(smoothlife_local PROPERTIES COMPILE_FLAGS "-DGUI -DSIM")
+set_target_properties(smoothlife_local PROPERTIES COMPILE_FLAGS "-DGUI -DSIM -DGUI_TYPE=${GUI_TYPE}")
 target_link_libraries(smoothlife_local ${SDL2_LIBRARY} ${OPENGL_gl_LIBRARY} ${OPENGL_glu_LIBRARY} ${GLEW_LIBRARIES} ${Boost_LIBRARIES})
 
 if(BUILD_INTEL AND BUILD_MIC)
