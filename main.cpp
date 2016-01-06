@@ -65,10 +65,10 @@ int main(int argc, char ** argv)
 #endif
 
 #if defined(GUI) && defined(SIM)
-int main()
+int main(int argc, char ** argv)
 {
     cerr << "Implement main_gui_local" << endl;
-    ruleset rules = RULESET();
+    ruleset rules = ruleset_from_cli(argc, argv);
     simulator s(rules);
     s.initialize();
 

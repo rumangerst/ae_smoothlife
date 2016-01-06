@@ -17,9 +17,6 @@
 
 using namespace std;
 
-#define FIELD_W 300
-#define FIELD_H 200
-
 #define SIMULATOR_MODE MODE_SIMULATE //Set the mode of the simulator
 #define WAIT_FOR_RENDERING true // if true, calcation threads will be waiting for the renderer to give a finishing signal
 
@@ -32,9 +29,6 @@ class simulator
 public:
     simulator(const ruleset & rules);
     ~simulator();
-
-    const int field_width = FIELD_W;
-    const int field_height = FIELD_H;
 
     const ruleset rules;
     atomic<vectorized_matrix<float>*> space_of_renderer;
@@ -79,9 +73,9 @@ private:
 
     void initialize_field_1()
     {
-        for(int x = 0; x < field_width; ++x)
+        for(int x = 0; x < rules.get_space_width(); ++x)
         {
-            for(int y = 0; y < field_height; ++y)
+            for(int y = 0; y < rules.get_space_height(); ++y)
             {
                 space_current->setValue(1,x,y);
             }
@@ -94,9 +88,9 @@ private:
         default_random_engine re(rd());
         uniform_real_distribution<float> random_state(0,1);
 
-        for(int x = 0; x < field_width; ++x)
+        for(int x = 0; x < rules.get_space_width(); ++x)
         {
-            for(int y = 0; y < field_height; ++y)
+            for(int y = 0; y < rules.get_space_height(); ++y)
             {
                 space_current->setValue(random_state(re),x,y);
             }
@@ -112,22 +106,22 @@ private:
         default_random_engine re(rd());
 
         uniform_real_distribution<float> random_idk(0,0.5);
-        uniform_real_distribution<float> random_point_x(0,field_width);
-        uniform_real_distribution<float> random_point_y(0,field_height);
+        uniform_real_distribution<float> random_point_x(0,rules.get_space_width());
+        uniform_real_distribution<float> random_point_y(0,rules.get_space_height());
 
         float mx, my;
 
-        mx = 2*rules.ra; if (mx>field_width) mx=field_width;
-        my = 2*rules.ra; if (my>field_height) my=field_height;
+        mx = 2*rules.get_ra(); if (mx>rules.get_space_width()) mx=rules.get_space_width();
+        my = 2*rules.get_ra(); if (my>rules.get_space_height()) my=rules.get_space_height();
 
-        for(int t=0; t<=(int)(field_width*field_height/(mx*my)); ++t)
+        for(int t=0; t<=(int)(rules.get_space_width()*rules.get_space_height()/(mx*my)); ++t)
         {
             float mx, my, dx, dy, u, l;
             int ix, iy;
 
             mx = random_point_x(re);
             my = random_point_y(re);
-            u = rules.ra*(random_idk(re) + 0.5);
+            u = rules.get_ra()*(random_idk(re) + 0.5);
 
             for (iy=(int)(my-u-1); iy<=(int)(my+u+1); ++iy)
                 for (ix=(int)(mx-u-1); ix<=(int)(mx+u+1); ++ix)
@@ -139,11 +133,11 @@ private:
                     {
                         int px = ix;
                         int py = iy;
-                        while (px<  0) px+=field_width;
-                        while (px>=field_width) px-=field_width;
-                        while (py<  0) py+=field_height;
-                        while (py>=field_height) py-=field_height;
-                        if (px>=0 && px<field_width && py>=0 && py<field_height)
+                        while (px<  0) px+=rules.get_space_width();
+                        while (px>=rules.get_space_width()) px-=rules.get_space_width();
+                        while (py<  0) py+=rules.get_space_height();
+                        while (py>=rules.get_space_height()) py-=rules.get_space_height();
+                        if (px>=0 && px<rules.get_space_width() && py>=0 && py<rules.get_space_height())
                         {
                             space_current->setValue(1.0,px,py);
                         }
@@ -163,9 +157,9 @@ private:
         const float p_proagate = 0.3;
 
         //Seed
-        for(int x = 0; x < field_width; ++x)
+        for(int x = 0; x < rules.get_space_width(); ++x)
         {
-            for(int y = 0; y < field_height; ++y)
+            for(int y = 0; y < rules.get_space_height(); ++y)
             {
                 space_current->setValue(random_state(re) <= p_seed ? 1 : 0, x,y);
             }
@@ -174,9 +168,9 @@ private:
         //Propagate
         for(int i = 0; i < 5; ++i)
         {
-            for(int x = 0; x < field_width; ++x)
+            for(int x = 0; x < rules.get_space_width(); ++x)
             {
-                for(int y = 0; y < field_height; ++y)
+                for(int y = 0; y < rules.get_space_height(); ++y)
                 {
                     float f = space_current->getValue(x,y);
 
@@ -214,12 +208,12 @@ private:
     //Corrected rules according to ref. implementation
     inline float sigma2(cfloat x, cfloat a, cfloat b)
     {
-        return sigma1(x,a,rules.alpha_n) * ( 1.0 - sigma1(x,b,rules.alpha_n));
+        return sigma1(x,a,rules.get_alpha_n()) * ( 1.0 - sigma1(x,b,rules.get_alpha_n()));
     }
 
     inline float sigmam(cfloat x, cfloat y, cfloat m)
     {
-        return x * ( 1.0 - sigma1(m,0.5,rules.alpha_m)) + y*sigma1(m, 0.5, rules.alpha_m);
+        return x * ( 1.0 - sigma1(m,0.5,rules.get_alpha_m())) + y*sigma1(m, 0.5, rules.get_alpha_m());
     }
 
     /**
@@ -231,7 +225,7 @@ private:
     inline float discrete_state_func_1(cfloat n, cfloat m)
     {
         //According to ref. implementation
-        return sigmam(sigma2(n,rules.b1,rules.b2),sigma2(n,rules.d1,rules.d2),m);
+        return sigmam(sigma2(n,rules.get_b1(),rules.get_b2()),sigma2(n,rules.get_d1(),rules.get_d2()),m);
         //return sigma2(n, sigmam(rules.b1,rules.d1,m),sigmam(rules.b2,rules.d2,m));
     }
 
@@ -242,7 +236,7 @@ private:
 
     inline float next_step_as_euler(cint x, cint y, cfloat n, cfloat m)
     {
-        return space_current->getValue(x,y) + rules.dt * discrete_as_euler(n,m);
+        return space_current->getValue(x,y) + rules.get_dt() * discrete_as_euler(n,m);
     }
 
     /**
