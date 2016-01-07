@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.0)
 project(ae_smoothlife)    
 
+# enable unit testing
+enable_testing()
+
 OPTION(BUILD_INTEL "Build with intel compiler" OFF)
 OPTION(BUILD_MIC "Also build MIC version" OFF)
 OPTION(GCC_VERBOSE_VECTOR "Show complete GCC vector report" OFF)
@@ -28,12 +31,14 @@ set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O3 -DNDEBUG -g")
 set(CMAKE_CXX_FLAGS_MINSIZEREL "-Os -DNDEBUG")
 
 set(SOURCES_SIM
-main.cpp
 simulator.cpp
 matrix.h
 aligned_vector.h
 ruleset.h
 mpi_manager.h)
+
+set(SOURCES_TESTS
+test_main.cpp)
 
 set(SOURCES_GUI
 sdl_gui.cpp
@@ -50,7 +55,7 @@ shaders/microscope2.fsh
 shaders/blue.vsh
 shaders/blue.fsh)
 
-set(SOURCES ${SOURCES_SIM} ${SOURCES_GUI})
+set(SOURCES main.cpp ${SOURCES_SIM} ${SOURCES_GUI})
 
 find_package(SDL2 REQUIRED)
 find_package(OpenGL REQUIRED)
@@ -78,9 +83,11 @@ message("GUI_TYPE is ${GUI_TYPE}")
 # smoothlife_sim.mic: Simulator only, no graphics, compiled for MIC (intel only)
 # smoothlife_ui: GUI only, obtains data from smoothlife and displays it
 # smoothlife_local: 1 thread for GUI and other threads for simulation
-add_executable(smoothlife_sim ${SOURCES_SIM})
-add_executable(smoothlife_ui ${SOURCES_SIM} ${SOURCES_GUI})
-add_executable(smoothlife_local ${SOURCES_SIM} ${SOURCES_GUI})
+# smoothlife_tests: tests
+add_executable(smoothlife_sim main.cpp ${SOURCES_SIM})
+add_executable(smoothlife_ui main.cpp ${SOURCES_SIM} ${SOURCES_GUI})
+add_executable(smoothlife_local main.cpp ${SOURCES_SIM} ${SOURCES_GUI})
+add_executable(smoothlife_tests ${SOURCES_TESTS} ${SOURCES_SIM})
 
 if(BUILD_INTEL AND BUILD_MIC)
   add_executable(smoothlife_sim.mic ${SOURCES_SIM})
@@ -89,14 +96,21 @@ endif()
 # smoothlife_ui is determined by #ifdef GUI
 # smoothlife_local gets #ifdef GUI and #ifdef SIM
 # smoothlife_sim gets #ifdef SIM
-set_target_properties(smoothlife_sim PROPERTIES COMPILE_FLAGS "-DAPP_SIM=true")
+set_target_properties(smoothlife_sim PROPERTIES COMPILE_FLAGS "-DAPP_SIM=true -DAPP_GUI=false")
 target_link_libraries(smoothlife_sim ${Boost_LIBRARIES})
-set_target_properties(smoothlife_ui PROPERTIES COMPILE_FLAGS "-DAPP_GUI=true -DGUI_TYPE=${GUI_TYPE}")
+set_target_properties(smoothlife_ui PROPERTIES COMPILE_FLAGS "-DAPP_GUI=true -DAPP_SIM=false -DGUI_TYPE=${GUI_TYPE}")
 target_link_libraries(smoothlife_ui ${SDL2_LIBRARY} ${OPENGL_gl_LIBRARY} ${OPENGL_glu_LIBRARY} ${GLEW_LIBRARIES})
-set_target_properties(smoothlife_local PROPERTIES COMPILE_FLAGS "-DAPP_GUI -DAPP_SIM -DGUI_TYPE=${GUI_TYPE}")
+set_target_properties(smoothlife_local PROPERTIES COMPILE_FLAGS "-DAPP_GUI=true -DAPP_SIM=true -DGUI_TYPE=${GUI_TYPE}")
 target_link_libraries(smoothlife_local ${SDL2_LIBRARY} ${OPENGL_gl_LIBRARY} ${OPENGL_glu_LIBRARY} ${GLEW_LIBRARIES} ${Boost_LIBRARIES})
+
+set_target_properties(smoothlife_tests PROPERTIES COMPILE_FLAGS "-DAPP_SIM=true -DAPP_GUI=false")
+target_link_libraries(smoothlife_tests ${Boost_LIBRARIES})
 
 if(BUILD_INTEL AND BUILD_MIC)
   set_target_properties(smoothlife_sim.mic PROPERTIES COMPILE_FLAGS "-DAPP_SIM -mmic")
   target_link_libraries(smoothlife_sim.mic ${Boost_LIBRARIES})
 endif()
+
+#Adding test to cmake
+# run 'make test' to test
+add_test(SMOOTHLIFE_TEST smoothlife_tests)
