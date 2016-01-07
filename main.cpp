@@ -8,21 +8,21 @@
 
 // If this exe is a simulator, use simulator class
 // otherwise only include matrix
-#ifdef SIM
+#if APP_SIM
 #include "simulator.h"
 #else
 #include "matrix.h"
 #endif
 
 // Include the GUI headers if this is the GUI
-#ifdef GUI
+#if APP_GUI
 #include "sdl_gui.h"
 #include "ogl_gui.h"
 #endif
 
 using namespace std;
 
-#if !defined(GUI) && defined(SIM)
+#if !APP_GUI && APP_SIM
 int main(int argc, char ** argv)
 {
     try
@@ -42,7 +42,7 @@ int main(int argc, char ** argv)
 }
 #endif
 
-#if defined(GUI) && !defined(SIM)
+#if APP_GUI && !APP_SIM
 int main(int argc, char ** argv)
 {
     try
@@ -62,7 +62,7 @@ int main(int argc, char ** argv)
 }
 #endif
 
-#if defined(GUI) && defined(SIM)
+#if APP_GUI && APP_SIM
 int main(int argc, char ** argv)
 {
     cerr << "Implement main_gui_local" << endl;

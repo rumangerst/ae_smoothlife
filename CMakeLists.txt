@@ -89,14 +89,14 @@ endif()
 # smoothlife_ui is determined by #ifdef GUI
 # smoothlife_local gets #ifdef GUI and #ifdef SIM
 # smoothlife_sim gets #ifdef SIM
-set_target_properties(smoothlife_sim PROPERTIES COMPILE_FLAGS "-DSIM")
+set_target_properties(smoothlife_sim PROPERTIES COMPILE_FLAGS "-DAPP_SIM=true")
 target_link_libraries(smoothlife_sim ${Boost_LIBRARIES})
-set_target_properties(smoothlife_ui PROPERTIES COMPILE_FLAGS "-DGUI -DGUI_TYPE=${GUI_TYPE}")
+set_target_properties(smoothlife_ui PROPERTIES COMPILE_FLAGS "-DAPP_GUI=true -DGUI_TYPE=${GUI_TYPE}")
 target_link_libraries(smoothlife_ui ${SDL2_LIBRARY} ${OPENGL_gl_LIBRARY} ${OPENGL_glu_LIBRARY} ${GLEW_LIBRARIES})
-set_target_properties(smoothlife_local PROPERTIES COMPILE_FLAGS "-DGUI -DSIM -DGUI_TYPE=${GUI_TYPE}")
+set_target_properties(smoothlife_local PROPERTIES COMPILE_FLAGS "-DAPP_GUI -DAPP_SIM -DGUI_TYPE=${GUI_TYPE}")
 target_link_libraries(smoothlife_local ${SDL2_LIBRARY} ${OPENGL_gl_LIBRARY} ${OPENGL_glu_LIBRARY} ${GLEW_LIBRARIES} ${Boost_LIBRARIES})
 
 if(BUILD_INTEL AND BUILD_MIC)
-  set_target_properties(smoothlife_sim.mic PROPERTIES COMPILE_FLAGS "-DSIM -mmic")
+  set_target_properties(smoothlife_sim.mic PROPERTIES COMPILE_FLAGS "-DAPP_SIM -mmic")
   target_link_libraries(smoothlife_sim.mic ${Boost_LIBRARIES})
 endif()
