@@ -37,11 +37,34 @@ public:
     {
         if (MPI_SUCCESS != MPI_Init(&argc, &argv ))
             throw std::runtime_error("called MPI_Init twice");
+        
+        check_role();
     }
 
     ~mpi_manager()
     {
         MPI_Finalize();
+    }
+    
+    /**
+     * @brief checks if this rank is consistent with its associated role
+     */
+    void check_role()
+    {
+        if(role() == mpi_role::USER_INTERFACE)
+        {
+            if(!APP_GUI)
+            {                
+                throw std::runtime_error("rank is known as GUI, but executable is not compiled as GUI!");
+            }
+        }
+        else
+        {
+            if(!APP_SIM)
+            {                
+                throw std::runtime_error("rank is known as simulator, but executable is not compiled as simulator!");
+            }
+        }
     }
 
     /**

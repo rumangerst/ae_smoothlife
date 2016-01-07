@@ -31,9 +31,9 @@ int main(int argc, char ** argv)
       
       cout << "Role:" << mpi.role() << endl;
     }
-    catch(exception ex)
+    catch(exception & ex)
     {
-      cerr << "Error: " << ex.what() << endl;
+      cerr << "Exception | " << ex.what() << endl;
       
       return -1;
     }
@@ -51,9 +51,9 @@ int main(int argc, char ** argv)
       
       cout << "Role:" << mpi.role() << endl;
     }
-    catch(exception ex)
+    catch(exception & ex)
     {
-      cerr << "Error: " << ex.what() << endl;
+      cerr << "Exception | " << ex.what() << endl;
       
       return -1;
     }
