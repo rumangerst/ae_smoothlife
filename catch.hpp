@@ -7841,10 +7841,10 @@ std::string fpToString( T value, int precision ) {
 }
 
 std::string toString( const double value ) {
-    return fpToString( value, 10 );
+    return fpToString( value, std::numeric_limits<double>::digits10 );
 }
 std::string toString( const float value ) {
-    return fpToString( value, 5 ) + "f";
+    return fpToString( value, std::numeric_limits<float>::digits10 ) + "f";
 }
 
 std::string toString( bool value ) {

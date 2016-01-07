@@ -19,6 +19,7 @@ using namespace std;
 
 #define SIMULATOR_MODE MODE_SIMULATE //Set the mode of the simulator
 #define WAIT_FOR_RENDERING true // if true, calcation threads will be waiting for the renderer to give a finishing signal
+#define SIMULATOR_INITIALIZATION_FUNCTION space_set_splat //The function used for initialization
 
 
 /**
@@ -47,9 +48,15 @@ public:
     bool optimize = true; //use the optimized methods
 
     /**
-     * @brief Initializes all necessary fields
+     * @brief Initializes all necessary fields. Initializes field with default initialization function
      */
     void initialize();
+    
+    /**
+     * @brief Initialize all necessary fields
+     * @param predefined_space A predefined space 
+     */
+    void initialize(vectorized_matrix<float> & predefined_space);
     
     /**
      * @brief Simulates 1 (or dt) steps
@@ -72,18 +79,18 @@ private:
     vectorized_matrix<float>* space_current;
     vectorized_matrix<float>* space_next;
 
-    void initialize_field_1()
+    void space_set_1(vectorized_matrix<float>* space)
     {
         for(int x = 0; x < rules.get_space_width(); ++x)
         {
             for(int y = 0; y < rules.get_space_height(); ++y)
             {
-                space_current->setValue(1,x,y);
+                space->setValue(1,x,y);
             }
         }
     }
 
-    void initialize_field_random()
+    void space_set_random(vectorized_matrix<float>* space)
     {
         random_device rd;
         default_random_engine re(rd());
@@ -93,7 +100,7 @@ private:
         {
             for(int y = 0; y < rules.get_space_height(); ++y)
             {
-                space_current->setValue(random_state(re),x,y);
+                space->setValue(random_state(re),x,y);
             }
         }
     }
@@ -101,7 +108,7 @@ private:
     /**
      * @brief initialize_field_splat Taken from reference implementation to generate "splats"
      */
-    void initialize_field_splat()
+    void space_set_splat(vectorized_matrix<float>* space)
     {
         random_device rd;
         default_random_engine re(rd());
@@ -140,14 +147,14 @@ private:
                         while (py>=rules.get_space_height()) py-=rules.get_space_height();
                         if (px>=0 && px<rules.get_space_width() && py>=0 && py<rules.get_space_height())
                         {
-                            space_current->setValue(1.0,px,py);
+                            space->setValue(1.0,px,py);
                         }
                     }
                 }
         }
     }
 
-    void initialize_field_propagate()
+    void space_set_propagate(vectorized_matrix<float>* space)
     {
         random_device rd;
         default_random_engine re(rd());
@@ -162,7 +169,7 @@ private:
         {
             for(int y = 0; y < rules.get_space_height(); ++y)
             {
-                space_current->setValue(random_state(re) <= p_seed ? 1 : 0, x,y);
+                space->setValue(random_state(re) <= p_seed ? 1 : 0, x,y);
             }
         }
 
@@ -173,18 +180,18 @@ private:
             {
                 for(int y = 0; y < rules.get_space_height(); ++y)
                 {
-                    float f = space_current->getValue(x,y);
+                    float f = space->getValue(x,y);
 
                     if(f > 0.5)
                     {
                         if(random_state(re) <= p_proagate)
-                            space_current->setValueWrapped(1,x-1,y);
+                            space->setValueWrapped(1,x-1,y);
                         if(random_state(re) <= p_proagate)
-                            space_current->setValueWrapped(1,x+1,y);
+                            space->setValueWrapped(1,x+1,y);
                         if(random_state(re) <= p_proagate)
-                            space_current->setValueWrapped(1,x,y-1);
+                            space->setValueWrapped(1,x,y-1);
                         if(random_state(re) <= p_proagate);
-                            space_current->setValueWrapped(1,x,y+1);
+                            space->setValueWrapped(1,x,y+1);
                     }
                 }
             }
