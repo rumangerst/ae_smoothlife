@@ -125,7 +125,10 @@ public:
     T getValue(cint x, cint y) const { return M[matrix_index(x,y,ld)]; }
     T getValueWrapped(cint x, cint y) const { return M[matrix_index_wrapped(x,y,columns,rows,ld)]; }
     
-    const T* getRow(int y) const { return &M.data()[matrix_index(0,y,ld)]; }
+    //At least row method can be useful
+    const T* getRow_ptr(int y) const { return &M.data()[matrix_index(0,y,ld)]; }
+    const T* getValue_ptr(cint x, cint y) const { return &M.data()[matrix_index(x,y,ld)]; }
+    const T* getValueWrapped_ptr(cint x, cint y) const { return &M.data()[matrix_index_wrapped(x,y,columns,rows,ld)]; }
 	
     void setValue(T val, cint x, cint y) { M[matrix_index(x,y,ld)] = val; }
     void setValueWrapped(T val, cint x, cint y) { M[matrix_index_wrapped(x,y,columns,rows,ld)] = val; }

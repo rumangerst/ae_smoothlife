@@ -44,6 +44,7 @@ public:
 
     bool initialized = false;
     bool running = false;
+    bool optimize = true; //use the optimized methods
 
     /**
      * @brief Initializes all necessary fields

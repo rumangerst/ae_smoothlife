@@ -127,8 +127,8 @@ void simulator::simulate_step()
   {
       for(int y = 0; y < rules.get_space_height(); ++y)
       {
-	  cfloat n = getFilling(x, y, inner_mask, inner_mask_sum); // filling of inner circle
-	  cfloat m = getFilling(x, y, outer_mask, outer_mask_sum); // filling of outer ring
+	  cfloat n = optimize ? getFilling(x, y, inner_mask, inner_mask_sum) : getFilling_unoptimized(x, y, inner_mask, inner_mask_sum); // filling of inner circle
+	  cfloat m = optimize ? getFilling(x, y, outer_mask, outer_mask_sum) : getFilling_unoptimized(x, y, outer_mask, outer_mask_sum); // filling of outer ring
 
 	  //Calculate the new state based on fillings n and m
 	  //Smooth state function must be clamped to [0,1] (this is also done by author's implementation!)
