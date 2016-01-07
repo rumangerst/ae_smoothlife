@@ -1,0 +1,89 @@
+Master Simulator w/o slave simulators
+=====================================
+
+STATUS TAG_COMMUNICATION
+BUFFER TAG_SEND_DATA SIZE=QUEUE_SIZE
+//STATUS TAG_SEND_PREPARE
+STATUS TAG_SEND_DATA
+
+INT SEND_STATUS = IDLE
+
+IRECV TAG_COMMUNICATION
+
+WHILE RUNNING
+    
+    IF !QUEUE_FULL
+        
+        simulate()
+        enqueue()
+        
+    IF RECIEVED TAG_COMMUNICATION
+    
+        RUNNING = TAG_COMMUNICATION.RUNNING
+        
+        IF !RUNNING
+            RETURN
+            
+        IRECV TAG_COMMUNICATION
+        
+    IF IDLE TAG_SEND_PREPARE && IDLE TAG_SEND_DATA
+    
+        IF SEND_STATUS == IDLE
+    
+            BUFFER <- dequeue() X BUFFER_CONTAINS            
+           
+            ISEND TAG_SEND_PREPARE SIZE(BUFFER_CONTAINS)            
+            SEND_STATUS = PREPARING
+            
+            
+        ELSE IF SEND_STATUS == PREPARING
+        
+            ISEND TAG_SEND_DATA BUFFER            
+            SEND_STATUS = SENDING
+            
+        ELSE IF SEND_STATUS == SENDING
+        
+            SEND_STATUS = IDLE
+        
+GUI
+===
+        
+STATUS TAG_COMMUNICATION
+BUFFER TAG_RECIEVE_DATA SIZE=QUEUE_SIZE
+INT BUFFER_RECIEVE_SIZE
+STATUS TAG_RECIEVE_PREPARE
+STATUS TAG_RECIEVE_DATA
+
+INT RECIEVE_STATUS = IDLE
+
+WHILE RUNNING
+
+    ...
+    
+    IF IDLE TAG_COMMUNICATION
+        
+        ISEND TAG_COMMUNICATION
+        
+    IF RECIEVE_STATUS == IDLE
+    
+        IRECV TAG_RECIEVE_PREPARE
+        RECIEVE_STATUS = PREPARE
+        
+    IF RECIEVE_STATUS == PREPARE && RECIEVED TAG_RECIEVE_PREPARE
+        
+        BUFFER_RECIEVE_SIZE = TAG_RECIEVE_PREPARE
+        RECIEVE_STATUS = DATA
+        
+        IRECV TAG_RECIEVE_DATA
+        
+    IF RECIEVE_STATUS == DATA && RECIEVED TAG_RECIEVE_DATA
+    
+        enqueue() <- BUFFER X BUFFER_RECIEVE_SIZE //eventually dequeue
+        
+        RECIEVE_STATUS = IDLE
+        
+            
+    
+            
+    
+    
