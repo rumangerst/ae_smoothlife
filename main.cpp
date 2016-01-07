@@ -22,8 +22,6 @@
 
 using namespace std;
 
-#define RULESET ruleset_rafler_paper
-
 #if !defined(GUI) && defined(SIM)
 int main(int argc, char ** argv)
 {
