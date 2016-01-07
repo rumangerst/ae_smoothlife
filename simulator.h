@@ -30,7 +30,7 @@ public:
     simulator(const ruleset & rules);
     ~simulator();
 
-    const ruleset rules;
+    ruleset rules;
     atomic<vectorized_matrix<float>*> space_of_renderer;
     atomic<bool>* is_space_drawn_once_by_renderer; //TODO: is probably obsolete with MPI, but still still good for testing first!
     atomic<bool> new_space_available;

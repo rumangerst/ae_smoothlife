@@ -122,27 +122,12 @@ public:
 
     // Getter and Setter methods
 
-    T getValue(cint x, cint y) const {
-      #pragma vector aligned	// needed for vectorization
-      return M[matrix_index(x,y,ld)]; 
-    }
-
-    T getValueWrapped(cint x, cint y) const {
-      #pragma vector aligned	// needed for vectorization
-      return M[matrix_index_wrapped(x,y,columns,rows,ld)];
-    }
-
-    void setValue(T val, cint x, cint y) { 
-      #pragma vector aligned
-      M[matrix_index(x,y,ld)] = val; 
-    }
-    
-    void setValueWrapped(T val, cint x, cint y) { 
-      #pragma vector aligned
-      M[matrix_index_wrapped(x,y,columns,rows,ld)] = val; 
-    }
-    //TODO: setValueWrapped with dim? Should be avoided, i guess
-
+    T getValue(cint x, cint y) const { return M[matrix_index(x,y,ld)]; }
+    T getValueWrapped(cint x, cint y) const { return M[matrix_index_wrapped(x,y,columns,rows,ld)]; }
+	
+    void setValue(T val, cint x, cint y) { M[matrix_index(x,y,ld)] = val; }
+    void setValueWrapped(T val, cint x, cint y) { M[matrix_index_wrapped(x,y,columns,rows,ld)] = val; }
+	const T * getValues() const { return M.data(); }
     int getLd() const { return this->ld; }
     int getNumRows() const { return this->rows; }
     int getNumCols() const { return this->columns; }

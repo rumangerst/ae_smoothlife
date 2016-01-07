@@ -235,8 +235,9 @@ class ruleset_smooth_life_l : public ruleset
 {
 public:
     ruleset_smooth_life_l(int width, int height) : ruleset(width, height)
-    {         
-         set_ra(10);
+    {        
+	 printf("Using ruleset: smooth life l\n"); 
+         set_ra(20);
          set_rr(3.0);
          set_b1(0.257);
          set_b2(0.336);
@@ -258,6 +259,7 @@ public:
 
     ruleset_rafler_paper(int width, int height) : ruleset(width, height)
     {
+	printf("Using ruleset: rafler paper\n");
         set_alpha_n(0.028);
                 set_alpha_m(0.147);
                 set_ra(21);
@@ -267,7 +269,7 @@ public:
                 set_d1(0.267);
                 set_d2(0.445);
                 set_is_discrete(false);
-                set_dt(0.1);
+                set_dt(0.05);
     }
 };
 

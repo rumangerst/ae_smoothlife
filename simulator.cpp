@@ -1,4 +1,6 @@
 ﻿#include "simulator.h"
+#include "aligned_vector.h"
+#include <assert.h>
 
 /*
  * DONE:
@@ -199,15 +201,26 @@ void simulator::run_simulation_master()
 
 float simulator::getFilling(cint at_x, cint at_y, const vectorized_matrix<float> &mask, cfloat mask_sum)
 {
-    // The theorectically considered bondaries
-    cint XB = at_x - mask.getNumCols() / 2; // aka x_begin ; Ld can be greater, than #cols!
+    // These define the rect inside the grid being accessed by mask
+    cint XB = at_x - mask.getNumCols() / 2; // aka x_begin
     cint XE = at_x + mask.getNumCols() / 2; // aka x_end
     cint YB = at_y - mask.getNumRows() / 2; // aka y_begin
     cint YE = at_y + mask.getNumRows() / 2; // aka y_end
 
-    float f = 0;
+	/* TODO: known issues:
+	 * - die accessed index 'at_x' is only sometimes aligned...
+	 */
+    
+	cint sim_ld = space_current->getLd();
+    cint mask_ld = mask.getLd();
+	const float* const __restrict__ sim_space = this->space_current->getValues();
+	const float* const __restrict__ mask_space = mask.getValues();
+	
+	assert(long(sim_space) % 64 == 0);
+	assert(long(mask_space) % 64 == 0);
 
     //NOTE: if XB or YB is negative, we do not need to check XE or YE - they have to be within the field boundaries
+	float f = 0;
     if (XB >= 0) {
         if (XE < rules.get_space_width()) {
             // NOTE: x accessible without wrapping
@@ -215,54 +228,45 @@ float simulator::getFilling(cint at_x, cint at_y, const vectorized_matrix<float>
             if (YB >= 0) {
                 if (YE < rules.get_space_height()) {
                     // ideal case. no wrapping
-                    // NOTE: vec: speedup good, 9.7
-                    // we access points safely here
                     for(int y = YB; y < YE; ++y) {
-                        cint Y = y;
-                        cint YB_ = y-YB;
-                        #pragma omp simd
-                        #pragma vector aligned
+                        cint Y = y*sim_ld;
+                        cint YB_ = (y-YB)*mask_ld;
+						__assume_aligned(mask_space, ALIGNMENT);
+						__assume_aligned(sim_space, ALIGNMENT);
                         for(int x = XB; x < XE; ++x) {
-                            f += space_current->getValue(x,Y) * mask.getValue(x - XB, YB_);
+                            //f += space_current->getValue(x,Y) * mask.getValue(x - XB, YB_);
+							f += sim_space[x + Y] * mask_space[(x-XB) + YB_];
                         }
                     }
                 } else {
-                    // special case 2. Idially vectorized. SPEEDUP: 9.7
+                    // special case 2. Idially vectorized.
                     for(int y=YB; y<rules.get_space_height(); ++y) {
                         cint YB_ = y-YB;
-                        #pragma omp simd
-                        #pragma vector aligned
                         for(int x=XB; x<XE; ++x) {
                             f += space_current->getValue(x,y) * mask.getValue(x-XB,YB_);
                         }
                     }
 
-                    // optimized, wrapped access over the bottom border. SPEEDUP: 9.970
+                    // optimized, wrapped access over the bottom border.
                     for(int y=0; y<YE-rules.get_space_height(); ++y) {
                         cint mask_y_off = mask.getNumRows() - (YE-rules.get_space_height());
-                        #pragma omp simd
-                        #pragma vector aligned
                         for(int x=XB; x<XE; ++x) {
                             f += space_current->getValue(x,y) * mask.getValue(x-XB, mask_y_off+y);
                         }
                     }
                 }
             } else {
-                // special case 1. Idially vectorized. SPEEDUP 9.7
+                // special case 1. Idially vectorized.
                 for(int y=0; y<YE; ++y) {
                     cint YB_ = y-YB;
-                    #pragma omp simd
-                    #pragma vector aligned
                     for(int x=XB; x<XE; ++x) {
                         f += space_current->getValue(x,y) * mask.getValue(x-XB,YB_);
                     }
                 }
 
-                // optimized, wrapped access over the bottom border. SPEEDUP: 9.970
+                // optimized, wrapped access over the bottom border.
                 for(int y=rules.get_space_height()+YB; y<rules.get_space_height(); ++y) {
                     cint mask_y_off = rules.get_space_height() + YB;
-                    #pragma omp simd
-                    #pragma vector aligned
                     for(int x=XB; x<XE; ++x) {
                         f += space_current->getValue(x,y) * mask.getValue(x-XB, y-mask_y_off);
                     }
@@ -270,7 +274,7 @@ float simulator::getFilling(cint at_x, cint at_y, const vectorized_matrix<float>
             }
 
         } else if ((YB >= 0) && (YE < rules.get_space_height())) {
-            // special case 4. Non-unit strides (probably unavoidable). SPEEDUP: 3.740
+            // special case 4. Non-unit strides (probably unavoidable).
             for(int x=XB; x<rules.get_space_width(); ++x) {
                 cint XB_ = x-XB;
                 for(int y=YB; y<YE; ++y) {
@@ -279,7 +283,7 @@ float simulator::getFilling(cint at_x, cint at_y, const vectorized_matrix<float>
             }
 
 
-            // optimized, wrapped access over the bottom border. SPEEDUP: 3.890
+            // optimized, wrapped access over the bottom border.
             for(int x=0; x<(XE-rules.get_space_width()); ++x) {
                 cint mask_x_off = mask.getNumCols() - (XE-rules.get_space_width());
                 for(int y=YB; y<YE; ++y) {
@@ -287,19 +291,17 @@ float simulator::getFilling(cint at_x, cint at_y, const vectorized_matrix<float>
                 }
             }
         } else {
-            // hard case. use wrapped version. SPEEDUP: 1.280
+            // hard case. use wrapped version.
             for(int y = YB; y < YE; ++y) {
                 cint Y=y;
                 cint YB_ = y-YB;
-                #pragma omp simd
-                #pragma vector aligned
                 for(int x = XB; x < XE; ++x) {
                     f += space_current->getValueWrapped(x,Y) * mask.getValue(x - XB, YB_);
                 }
             }
         }
     } else if ((YB >= 0) && (YE < rules.get_space_height())) {
-        // special case 3. May have non-unit stride. SPEEDUP: 3.740
+        // special case 3. May have non-unit stride.
         for(int x=0; x<XE; ++x) {
             cint XB_ = x-XB;
             for(int y=YB; y<YE; ++y) {
@@ -307,7 +309,7 @@ float simulator::getFilling(cint at_x, cint at_y, const vectorized_matrix<float>
             }
         }
 
-        // NOTE: XB is negative here. SPEEDUP: 3.890
+        // NOTE: XB is negative here.
         for(int x=rules.get_space_width()+XB; x<rules.get_space_width(); ++x) {
             cint XB_ = rules.get_space_width() + XB;
             for(int y=YB; y<YE; ++y) {
@@ -315,12 +317,10 @@ float simulator::getFilling(cint at_x, cint at_y, const vectorized_matrix<float>
             }
         }
     } else {
-        // hard case. use wrapped version. SPEEDUP: 1.280
+        // hard case. use wrapped version.
         for(int y = YB; y < YE; ++y) {
             cint Y=y;
             cint YB_ = y-YB;
-            #pragma omp simd
-            #pragma vector aligned
             for(int x = XB; x < XE; ++x) {
                 f += space_current->getValueWrapped(x,Y) * mask.getValue(x - XB, YB_);
             }
@@ -338,17 +338,13 @@ float simulator::getFilling_unoptimized(cint at_x, cint at_y, const vectorized_m
     cint YB = at_y - mask.getNumRows() / 2; // aka y_begin
     cint YE = at_y + mask.getNumRows() / 2; // aka y_end
 
-    float f;
+    float f = 0;
 
     if (XB >= 0 && YB >= 0 && XE < rules.get_space_width() && YE < rules.get_space_height())
     {
-        //NOTE: vec: speedup good, 9.7
-        // we access points safely here
         for(int y = YB; y < YE; ++y) {
             cint Y = y;
             cint Y_BEG = y-YB;
-            #pragma omp simd
-            #pragma vector aligned
             for(int x = XB; x < XE; ++x) {
                 f += space_current->getValue(x,Y) * mask.getValue(x - XB, Y_BEG);
             }
@@ -356,8 +352,6 @@ float simulator::getFilling_unoptimized(cint at_x, cint at_y, const vectorized_m
     }
     else
     {
-        //TODO: vec: speedup bad, 1.29
-        // we access points "over" the edges of the grid here
         for(int y = YB; y < YE; ++y) {
             cint Y = y;
             cint Y_BEG = y-YB;
