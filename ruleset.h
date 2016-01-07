@@ -4,6 +4,7 @@
 
 #define RULESET_DEFAULT_SPACE_W 256
 #define RULESET_DEFAULT_SPACE_H 256
+#define RULESET_DEFAULT_t ruleset_smooth_life_l
 
 /**
  * @brief Contains the rules used for simulation
@@ -280,29 +281,125 @@ inline ruleset ruleset_from_name(std::string name, int width, int height)
 {
     if(name == "rafler_paper")
         return ruleset_rafler_paper(width, height);
+    else if (name == "L")
+        return ruleset_smooth_life_l(width, height);
     
-    return ruleset_smooth_life_l(width, height);    
+    return RULESET_DEFAULT_t(width, height);    
+}
+
+inline void cli_print_help()
+{
+    cout << "smooth_life" << endl;
+    cout << "smooth_life help" << endl;
+    cout << "smooth_life <ruleset> (w) (h) (ra) (rr) (b1) (b2) (d1) (d2) (alpha_m) (alpha_n) (dt) (discrete 0/1); set to = for no change" << endl;
+    cout << "smooth_life new (w) (h) (ra) (rr) (b1) (b2) (d1) (d2) (alpha_m) (alpha_n) (dt) (discrete 0/1)" << endl;
+}
+
+inline void ruleset_cli_set_float_value(char ** argv, int index, ruleset & base, bool new_ruleset, void (ruleset::*set)(float))
+{
+    string v = string(argv[index]);
+    
+    if(v != "=")
+    {
+        // Call function ptr "set" on base with argument converted to float
+        (base.*set)(stof(argv[index]));
+    }
+    else if (new_ruleset)
+    {
+        cerr << "You must set a value for new rulesets!" << endl;
+        exit(-1);
+    }
+}
+
+inline void ruleset_cli_set_bool_value(char ** argv, int index, ruleset & base, bool new_ruleset, void (ruleset::*set)(bool))
+{
+    string v = string(argv[index]);
+    
+    if(v != "=")
+    {
+        // Call function ptr "set" on base with argument converted to bool
+        (base.*set)(stoi(argv[index]) == 1);
+    }
+    else if (new_ruleset)
+    {
+        cerr << "You must set a value for new rulesets!" << endl;
+        exit(-1);
+    }
 }
 
 inline ruleset ruleset_from_cli(int argc, char ** argv)
 {
-    switch(argc - 1)
+    int params = argc - 1;
+    
+    if(params == 0)
     {
-        case 0:
-            //No parameters provided: Run with default settings
-            return ruleset_smooth_life_l(RULESET_DEFAULT_SPACE_W, RULESET_DEFAULT_SPACE_H);
-        case 1:
-            //Provided ruleset name
-            return ruleset_from_name(std::string(argv[1]), RULESET_DEFAULT_SPACE_W, RULESET_DEFAULT_SPACE_H);
-        case 2:
-            //Provided size - use default ruleset
-            return ruleset_smooth_life_l(RULESET_DEFAULT_SPACE_W, RULESET_DEFAULT_SPACE_H);
+        return ruleset_smooth_life_l(RULESET_DEFAULT_SPACE_W, RULESET_DEFAULT_SPACE_H);
+    }
+    else
+    {
+        if(string(argv[1]) == "help" || params > 13)
+        {
+            if(params > 13)
+                cerr << "Too many parameters!" << endl;
+            
+            cli_print_help();
+            exit(0);
+        }
+        else
+        {
+            bool new_ruleset = string(argv[1]) == "new";
+            
+            if(new_ruleset && params < 13)
+            {
+                cerr << "You must set all values for a new ruleset!" << endl;
+                exit(-1);
+            }
+            
+            int w = RULESET_DEFAULT_SPACE_W;
+            int h = RULESET_DEFAULT_SPACE_H;
+            
+            if(params >= 2 && string(argv[2]) != "=")
+                w = stoi(argv[2]);
+            if(params >= 3 && string(argv[3]) != "=")
+                h = stoi(argv[3]);
+            
+            ruleset base = new_ruleset ? RULESET_DEFAULT_t(w,h) : ruleset_from_name(string(argv[1]), w, h);
+            
+            //Set ra
+            if(params >= 4)
+                ruleset_cli_set_float_value(argv, 4, base, new_ruleset, &ruleset::set_ra);
+            //Set rr
+            if(params >= 5)
+                ruleset_cli_set_float_value(argv, 5, base, new_ruleset, &ruleset::set_rr);
+            //Set b1
+            if(params >= 6)
+                ruleset_cli_set_float_value(argv, 6, base, new_ruleset, &ruleset::set_b1);
+            //Set b2
+            if(params >= 7)
+                ruleset_cli_set_float_value(argv, 7, base, new_ruleset, &ruleset::set_b2);
+            //Set d1
+            if(params >= 8)
+                ruleset_cli_set_float_value(argv, 8, base, new_ruleset, &ruleset::set_d1);
+            //Set d2
+            if(params >= 9)
+                ruleset_cli_set_float_value(argv, 9, base, new_ruleset, &ruleset::set_d2);
+            //Set alpha_m
+            if(params >= 10)
+                ruleset_cli_set_float_value(argv, 10, base, new_ruleset, &ruleset::set_alpha_m);
+            //Set alpha_n
+            if(params >= 11)
+                ruleset_cli_set_float_value(argv, 11, base, new_ruleset, &ruleset::set_alpha_n);
+            //Set dt
+            if(params >= 12)
+                ruleset_cli_set_float_value(argv, 12, base, new_ruleset, &ruleset::set_dt);
+            //Set discrete
+            if(params >= 13)
+                ruleset_cli_set_bool_value(argv, 13, base, new_ruleset, &ruleset::set_is_discrete);
+            
+            return base;
+        }
     }
     
-    cerr << "Invalid arguments!" << endl;
-    cerr << "smooth_life" << endl;
-    cerr << "smooth_life <ruleset> <w> <h>" << endl;
-    cerr << "smooth_life <w> <h>" << endl;
-    
-    return ruleset_smooth_life_l(RULESET_DEFAULT_SPACE_W, RULESET_DEFAULT_SPACE_H);
+
+    return ruleset_smooth_life_l(RULESET_DEFAULT_SPACE_W, RULESET_DEFAULT_SPACE_H);    
 }
