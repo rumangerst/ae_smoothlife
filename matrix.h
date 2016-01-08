@@ -4,6 +4,7 @@
 #include <iostream>
 #include <math.h>
 #include "aligned_vector.h"
+#include <assert.h>
 
 /*
  * DONE:
@@ -65,22 +66,28 @@ inline int matrix_index_wrapped(cint x, cint y, cint w, cint h, cint ld)
  * @param size
  * @return
  */
-inline int matrix_calc_ld_with_padding(const int size, const int cachline_size)
+inline int matrix_calc_ld_with_padding(cint typesize, cint size, cint cacheline_size)
 {
-    return cachline_size * ceil(float(size) / cachline_size);
+    return cacheline_size * ceil(float(size * typesize)/cacheline_size);
+    //return size + size % cacheline_floats;
 }
 
 template <typename T>
 /**
  * @brief A matrix with row first approach
+ * - this is basically a data container to keep all important information 
+ * together
  */
 class vectorized_matrix
 {
 private:
-    aligned_vector<T> M __attribute__((aligned(64)));
+    aligned_vector<T> M __attribute__((aligned(ALIGNMENT)));
     int rows;
     int columns;
     int ld;
+    int offset;
+    int leftOffset;     // number of elements left from (a circles) center
+    int rightOffset;    // number of elements right from (a circles) center
 
 public:
     /**
@@ -91,6 +98,9 @@ public:
         rows = 0;
         columns = 0;
         ld = 0;
+        offset = 0;
+        leftOffset = 0;
+        rightOffset = 0;
     }
 
     /**
@@ -98,14 +108,39 @@ public:
      * @param columns number of elements per column
      * @param rows number of rows
      */
-    vectorized_matrix(int columns, int rows)
+    vectorized_matrix(cint columns, cint rows)
     {
-        int ld = matrix_calc_ld_with_padding(columns, CACHELINE_SIZE);
+        cint ld = matrix_calc_ld_with_padding(sizeof(T), columns, CACHELINE_SIZE);
+        assert( (ld*sizeof(T)) % CACHELINE_SIZE == 0);
 
         this->M = aligned_vector<T>(ld * rows);
         this->rows = rows;
         this->columns = columns;
         this->ld = ld;
+        this->offset = 0;
+        this->leftOffset = columns/2;
+        this->rightOffset = ld - leftOffset;
+    }
+    
+    /**
+     * @brief offset constructor. Is used to make circle masks with additional
+     * offset to re-enable vectorization in hard cases
+     * @param columns
+     * @param rows
+     * @param offset
+     */
+    vectorized_matrix(cint columns, cint rows, cint offset) {
+        assert(rows > 0 && columns > 0 && offset >= 0 && offset <= CACHELINE_FLOATS);
+        this->ld = CACHELINE_FLOATS * ceil(float(offset+columns)/CACHELINE_FLOATS);
+        assert(ld * sizeof(T) % CACHELINE_SIZE == 0);
+        this->M = aligned_vector<T>(ld * rows);
+        assert(long(this->M.data()) % ALIGNMENT == 0);
+        this->columns = columns;
+        this->rows = rows; // the actual number of rows potentially containing information
+        this->offset = offset;
+        this->leftOffset = ceil(columns/2) + offset; // will be +1 of the last, accessible index!
+        this->rightOffset = ld - leftOffset;
+        assert(leftOffset + rightOffset == ld);
     }
 
     /**
@@ -118,6 +153,9 @@ public:
         rows = copy.rows;
         columns = copy.columns;
         ld = copy.ld;
+        offset = copy.offset;
+        leftOffset = copy.leftOffset;
+        rightOffset = copy.rightOffset;
     }
 
     // Getter and Setter methods
@@ -125,20 +163,21 @@ public:
     T getValue(cint x, cint y) const { return M[matrix_index(x,y,ld)]; }
     T getValueWrapped(cint x, cint y) const { return M[matrix_index_wrapped(x,y,columns,rows,ld)]; }
     
-    //At least row method can be useful
     const T* getRow_ptr(int y) const { return &M.data()[matrix_index(0,y,ld)]; }
     const T* getValue_ptr(cint x, cint y) const { return &M.data()[matrix_index(x,y,ld)]; }
     const T* getValueWrapped_ptr(cint x, cint y) const { return &M.data()[matrix_index_wrapped(x,y,columns,rows,ld)]; }
 	
     void setValue(T val, cint x, cint y) { M[matrix_index(x,y,ld)] = val; }
     void setValueWrapped(T val, cint x, cint y) { M[matrix_index_wrapped(x,y,columns,rows,ld)] = val; }
-	const T * getValues() const { return M.data(); }
+    const T * getValues() const { return M.data(); }
+    
     int getLd() const { return this->ld; }
     int getNumRows() const { return this->rows; }
     int getNumCols() const { return this->columns; }
+    int getLeftOffset() const { return this->leftOffset; }
+    int getRightOffset() const { return this->rightOffset; }
 
-    // Avanced Access Methods
-
+    // Advanced Access Methods
     friend ostream& operator<<(ostream& out, const vectorized_matrix<T> & m )
     {
         for(int y = 0; y < m.columns; ++y)
@@ -160,17 +199,22 @@ public:
      * @param r radius of the circle
      * @param v the value the elements in the circle should be set to.
      * @param smooth_factor smooth the circle. Set it to 0 to disable smoothing. Will increase radius of the circle by this value
+     * @param offset the number of units added to the left boundary before drawing the circle begins
      */
-    void set_circle(cdouble center_x, cdouble center_y, cdouble r, const T v, cdouble smooth_factor)
+    void set_circle(cdouble center_x, cdouble center_y, cdouble r, const T v, cdouble smooth_factor, cint offset)
     {
-        for(int i = 0; i < columns; ++i)
+        assert (offset >= 0);
+        cdouble c_x = center_x + offset; // push it to the right
+        cdouble c_y = center_y;
+        
+        for(int i = 0; i < ld; ++i)
         {
             for(int j = 0; j < rows; ++j)
             {
                 cdouble local_x = i + 0.5;
                 cdouble local_y = j + 0.5;
 		
-		cdouble d = sqrt((local_x-center_x)*(local_x-center_x) + (local_y-center_y)*(local_y-center_y));
+		cdouble d = sqrt((local_x-c_x)*(local_x-c_x) + (local_y-c_y)*(local_y-c_y));
 		
 		/*
 		 * Calculate the interpolation weight with 
@@ -202,9 +246,9 @@ public:
      * @param v
      * @param smooth Will increase radius of the circle by this value
      */
-    void set_circle(cdouble r, const T v, cdouble smooth_factor)
+    void set_circle(cdouble r, const T v, cdouble smooth_factor, cint offset)
     {
-        set_circle(columns / 2.0, rows / 2.0, r, v, smooth_factor);
+        set_circle(columns/2.0, rows / 2.0, r, v, smooth_factor, offset);
     }
 
     /**
@@ -225,6 +269,22 @@ public:
 
         return s;
     }
+    
+    void print_to_console() {
+        cout << "matrix print:\n";
+        for (int y=0; y < this->rows; ++y) {
+            for (int x=0; x < this->ld; ++x)
+                printf((x<offset) ? "-" : ((this->getValue(x,y)==0) ? "0" : "x"), "  ");
+            printf("\n");
+        }
+        cout.flush();
+    }
+    
+    void print_info() {
+        cout << "rows: " << rows << "  cols: " << columns << "  ld: " << ld << endl;
+        cout << "left: " << leftOffset << "  right: " << rightOffset << "  off: " << offset << endl;
+        cout.flush();
+    } 
 };
 
 

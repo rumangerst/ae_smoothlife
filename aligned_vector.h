@@ -5,7 +5,7 @@
 
 #define ALIGNMENT 64 // memory border to align a memory address to
 #define CACHELINE_SIZE 64
-const int VEC_TRIP_SIZE = CACHELINE_SIZE/sizeof(float);
+const int CACHELINE_FLOATS = CACHELINE_SIZE/sizeof(float);
 
 template <typename T>
-using aligned_vector = std::vector<T, boost::alignment::aligned_allocator<T, 64>>;
+using aligned_vector = std::vector<T, boost::alignment::aligned_allocator<T, ALIGNMENT>>;

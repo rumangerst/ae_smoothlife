@@ -38,10 +38,12 @@ public:
 
     ulong spacetime = 0;
 
-    vectorized_matrix<float> outer_mask; // mask to calculate the filling of the outer ring
-    vectorized_matrix<float> inner_mask; // mask to calculate the filling of the inner cycle
+    // we need 2 masks for each unaligned space cases (to re-align it)
+    vector<vectorized_matrix<float>> outer_masks; // masks to calculate the filling of the outer ring
+    vector<vectorized_matrix<float>> inner_masks; // masks to calculate the filling of the inner cycle
     float outer_mask_sum;
     float inner_mask_sum;
+    int offset_from_mask_center; // the number of grid units from the center of masks [0] to index (0,0)
 
     bool initialized = false;
     bool running = false;
@@ -78,6 +80,8 @@ private:
 
     vectorized_matrix<float>* space_current;
     vectorized_matrix<float>* space_next;
+    
+    void initiate_masks();
 
     void space_set_1(vectorized_matrix<float>* space)
     {
@@ -249,22 +253,22 @@ private:
 
     /**
      * @brief calculates the area around the point (x,y) based on the mask & normalizes it by mask_sum
-     * @param x
-     * @param y
+     * @param at_x space x-coordinate
+     * @param at_y space y-coordinate
      * @param mask a non-sparsed matrix with target set [0,1]
      * @param mask_sum the sum of all values in the given matrix (the maximal, obtainable value of this function)
      * @return a float with a value in [0,1]
      */
-    float getFilling(cint x, cint y, const vectorized_matrix<float> & mask, cfloat mask_sum);
+    float getFilling(cint at_x, cint at_y, const vectorized_matrix<float> & mask, cfloat mask_sum);
 
     /**
      * @brief calculates the area around the point (x,y) based on the mask & normalizes it by mask_sum
      * USEFUL FOR TESTING THE CORRECTNIS OF OPTIMIZED CODE! KEEP THIS!
-     * @param x
-     * @param y
+     * @param at_x at_x space x-coordinate
+     * @param at_y space y-coordinate
      * @param mask a non-sparsed matrix with target set [0,1]
      * @param mask_sum the sum of all values in the given matrix (the maximal, obtainable value of this function)
      * @return a float with a value in [0,1]
      */
-    float getFilling_unoptimized(cint x, cint y, const vectorized_matrix<float> & mask, cfloat mask_sum);
+    float getFilling_unoptimized(cint at_x, cint at_y, const vectorized_matrix<float> & mask, cfloat mask_sum);
 };
