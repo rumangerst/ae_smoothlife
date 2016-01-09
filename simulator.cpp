@@ -17,7 +17,6 @@
 
 simulator::simulator(const ruleset & r) : rules(r)
 {
-    new_space_available.store(false);
 }
 
 simulator::~simulator()
@@ -41,7 +40,6 @@ void simulator::initialize(vectorized_matrix<float> & predefined_space)
 
     space_current = new vectorized_matrix<float>(predefined_space);
     space_next = new vectorized_matrix<float>(rules.get_space_width(), rules.get_space_height());
-    space_of_renderer.store(space_current);
 
     outer_masks.reserve(CACHELINE_FLOATS);
     inner_masks.reserve(CACHELINE_FLOATS);
@@ -228,27 +226,10 @@ void simulator::run_simulation_master()
             if (SIMULATOR_MODE == MODE_SIMULATE)
                 simulate_step();
 
-            /*
-             * NOTE: Start of synchronization
-             * - the master simulator (and all others) waits for the renderer to finish drawing the last image
-             * - it then blocks the renderer from continuing until "space_current" has been passed over
-             * - HACK: deep copy would make it so much simpler :o
-             */
-            if (WAIT_FOR_RENDERING)
-            {
-                //TODO: may catch a signal from MPI (from the renderer) in the future & only the gui machine has to do that
-                //HACK: in case of double buffer, we can already swap, but need to wait until rendering finished
-                //HACK: if we use triple buffering, 2 time steps may be calculated before calculation threads start to idle!
-                this->new_space_available = true; // prevent renderer from continuing after finishing the current image
-                while (! * this->is_space_drawn_once_by_renderer && running)
-                {
-                } // wait for renderer... !!! always add check for "running"
-            }
-
-            space_of_renderer.store(space_current); //Tell outside (e.g. renderer)
-            *this->is_space_drawn_once_by_renderer = false;
-            this->new_space_available = false;
-            /* NOTE: End of syncro */
+            // Put into queue if possible
+            while(space_queue.size() < SPACE_QUEUE_MAX_SIZE) {}
+            
+            space_queue.push(*space_current);
 
 #ifdef ENABLE_PERF_MEASUREMENT
             // NOTE: this should be done either directly after swapping or here

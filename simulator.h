@@ -11,6 +11,7 @@
 #include <random>
 #include <atomic>
 #include <chrono>
+#include <queue>
 #include "matrix.h"
 #include "ruleset.h"
 #include "aligned_vector.h"
@@ -18,9 +19,9 @@
 using namespace std;
 
 #define SIMULATOR_MODE MODE_SIMULATE //Set the mode of the simulator
-#define WAIT_FOR_RENDERING true // if true, calcation threads will be waiting for the renderer to give a finishing signal
 #define SIMULATOR_INITIALIZATION_FUNCTION space_set_splat //The function used for initialization
 
+#define SPACE_QUEUE_MAX_SIZE 32 //the queue size used by the program
 
 /**
  * @brief Encapsulates the calculation of states
@@ -32,10 +33,9 @@ public:
     ~simulator();
 
     ruleset rules;
-    atomic<vectorized_matrix<float>*> space_of_renderer;
-    atomic<bool>* is_space_drawn_once_by_renderer; //TODO: is probably obsolete with MPI, but still still good for testing first!
-    atomic<bool> new_space_available;
-
+    
+    
+    queue<vectorized_matrix<float>> space_queue; // Stores all calculated spaces to be fetched by local GUI or sent by MPI
     ulong spacetime = 0;
 
     // we need 2 masks for each unaligned space cases (to re-align it)
@@ -75,6 +75,15 @@ public:
      * @brief Runs the simulation including interface with master simulator as slave simulator
      */
     void run_simulation_slave();
+    
+    /**
+     * @brief Returns copy of the current space
+     * @return 
+     */
+    vectorized_matrix<float> get_current_space()
+    {
+        return vectorized_matrix<float>(*space_current);
+    }
 
 private:
 

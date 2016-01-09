@@ -53,12 +53,15 @@ SCENARIO("Test optimized simulation: Initialize at center", "[simulator]")
 
                 THEN("both simulators calculated the same state")
                 {
+                    vectorized_matrix<float> space_unoptimized = unoptimized_simulator.get_current_space();
+                    vectorized_matrix<float> space_optimized = optimized_simulator.get_current_space();
+                    
                     for (int column = 0; column < space.getNumCols(); ++column)
                     {
                         for (int row = 0; row < space.getNumRows(); ++row)
                         {
-                            float unoptimized_value = unoptimized_simulator.space_of_renderer.load()->getValue(column, row);
-                            float optimized_value = optimized_simulator.space_of_renderer.load()->getValue(column, row);
+                            float unoptimized_value = space_unoptimized.getValue(column, row);
+                            float optimized_value = space_optimized.getValue(column, row);
 
                             REQUIRE(unoptimized_value == optimized_value);
                         }
@@ -106,12 +109,15 @@ TEST_CASE("Test optimized simulation: Initialize at left/right border", "[simula
 
                 THEN("both simulators calculated the same state")
                 {
+                    vectorized_matrix<float> space_unoptimized = unoptimized_simulator.get_current_space();
+                    vectorized_matrix<float> space_optimized = optimized_simulator.get_current_space();
+                    
                     for (int column = 0; column < space.getNumCols(); ++column)
                     {
                         for (int row = 0; row < space.getNumRows(); ++row)
                         {
-                            float unoptimized_value = unoptimized_simulator.space_of_renderer.load()->getValue(column, row);
-                            float optimized_value = optimized_simulator.space_of_renderer.load()->getValue(column, row);
+                            float unoptimized_value = space_unoptimized.getValue(column, row);
+                            float optimized_value = space_optimized.getValue(column, row);
 
                             REQUIRE(unoptimized_value == optimized_value);
                         }
@@ -159,12 +165,15 @@ TEST_CASE("Test optimized simulation: Initialize at top/bottom border", "[simula
 
                 THEN("both simulators calculated the same state")
                 {
+                    vectorized_matrix<float> space_unoptimized = unoptimized_simulator.get_current_space();
+                    vectorized_matrix<float> space_optimized = optimized_simulator.get_current_space();
+                    
                     for (int column = 0; column < space.getNumCols(); ++column)
                     {
                         for (int row = 0; row < space.getNumRows(); ++row)
                         {
-                            float unoptimized_value = unoptimized_simulator.space_of_renderer.load()->getValue(column, row);
-                            float optimized_value = optimized_simulator.space_of_renderer.load()->getValue(column, row);
+                            float unoptimized_value = space_unoptimized.getValue(column, row);
+                            float optimized_value = space_optimized.getValue(column, row);
 
                             REQUIRE(unoptimized_value == optimized_value);
                         }

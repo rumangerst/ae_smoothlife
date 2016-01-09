@@ -10,8 +10,7 @@ class gui
 public:
 
     gui() 
-    {
-        is_space_drawn_once = false;
+    {        
     }
 
     virtual ~gui() 
@@ -23,16 +22,11 @@ public:
      */
     void run_local ( simulator * sim ) 
     {
-#ifdef ENABLE_PERF_MEASUREMENT
+/*#ifdef ENABLE_PERF_MEASUREMENT
         auto perf_time_start = chrono::high_resolution_clock::now();
         ulong frames_start = 0;
-#endif
+#endif*/
         
-        //Connect simulator and GUI
-        space = &sim->space_of_renderer;
-        sim->is_space_drawn_once_by_renderer = &is_space_drawn_once;
-        new_space_available = &sim->new_space_available;
-
         //Initialize the GUI
         if ( !initialize() ) 
         {
@@ -40,19 +34,24 @@ public:
             return;
         }
         
+        // predefine the space of the renderer
+        space = vectorized_matrix<float>(sim->rules.get_space_width(), sim->rules.get_space_height());
+        
         cout << "Local GUI started ..." << endl;
 
         running = true;
 
         while ( running ) 
         {
-            update ( running );
-            
-            if(new_space_available->load())
+            // Is there a new space in simulator queue? -> update renderer space then!
+            if(sim->space_queue.size() != 0)
             {
-                render();            
-                is_space_drawn_once.store(true);
-                
+                space.overwrite(sim->space_queue.front());
+                sim->space_queue.pop();
+            }
+            
+            update ( running );
+            render();      
 /*#ifdef ENABLE_PERF_MEASUREMENT
                 ++frames_rendered;
                 if ( frames_rendered%100 == 0 ) 
@@ -67,7 +66,6 @@ public:
                 }
 
 #endif*/
-            }
         }
         
         cout << "Local GUI quit." << endl;
@@ -85,9 +83,7 @@ public:
 
 protected:
     
-    atomic<vectorized_matrix<float> *>* space = nullptr;
-    atomic<bool> is_space_drawn_once; //TODO: is probably obsolete with MPI, but still still good for testing first!
-    atomic<bool>* new_space_available = nullptr;
+    vectorized_matrix<float> space;
 
     /**
      * @brief do any initialization tasks

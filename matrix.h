@@ -68,7 +68,7 @@ inline int matrix_index_wrapped(cint x, cint y, cint w, cint h, cint ld)
  */
 inline int matrix_calc_ld_with_padding(cint typesize, cint size, cint cacheline_size)
 {
-    return cacheline_size * ceil(float(size * typesize)/cacheline_size);
+    return cacheline_size * ceil(float(size * typesize) / cacheline_size);
     //return size + size % cacheline_floats;
 }
 
@@ -86,10 +86,11 @@ private:
     int columns;
     int ld;
     int offset;
-    int leftOffset;     // number of elements left from (a circles) center
-    int rightOffset;    // number of elements right from (a circles) center
+    int leftOffset; // number of elements left from (a circles) center
+    int rightOffset; // number of elements right from (a circles) center
 
 public:
+
     /**
      * @brief creates an empty matrix
      */
@@ -110,18 +111,18 @@ public:
      */
     vectorized_matrix(cint columns, cint rows)
     {
-        cint ld = matrix_calc_ld_with_padding(sizeof(T), columns, CACHELINE_SIZE);
-        assert( (ld*sizeof(T)) % CACHELINE_SIZE == 0);
+        cint ld = matrix_calc_ld_with_padding(sizeof (T), columns, CACHELINE_SIZE);
+        assert((ld * sizeof (T)) % CACHELINE_SIZE == 0);
 
         this->M = aligned_vector<T>(ld * rows);
         this->rows = rows;
         this->columns = columns;
         this->ld = ld;
         this->offset = 0;
-        this->leftOffset = columns/2;
+        this->leftOffset = columns / 2;
         this->rightOffset = ld - leftOffset;
     }
-    
+
     /**
      * @brief offset constructor. Is used to make circle masks with additional
      * offset to re-enable vectorization in hard cases
@@ -129,16 +130,17 @@ public:
      * @param rows
      * @param offset
      */
-    vectorized_matrix(cint columns, cint rows, cint offset) {
+    vectorized_matrix(cint columns, cint rows, cint offset)
+    {
         assert(rows > 0 && columns > 0 && offset >= 0 && offset <= CACHELINE_FLOATS);
-        this->ld = CACHELINE_FLOATS * ceil(float(offset+columns)/CACHELINE_FLOATS);
-        assert(ld * sizeof(T) % CACHELINE_SIZE == 0);
+        this->ld = CACHELINE_FLOATS * ceil(float(offset + columns) / CACHELINE_FLOATS);
+        assert(ld * sizeof (T) % CACHELINE_SIZE == 0);
         this->M = aligned_vector<T>(ld * rows);
         assert(long(this->M.data()) % ALIGNMENT == 0);
         this->columns = columns;
         this->rows = rows; // the actual number of rows potentially containing information
         this->offset = offset;
-        this->leftOffset = ceil(columns/2) + offset; // will be +1 of the last, accessible index!
+        this->leftOffset = ceil(columns / 2) + offset; // will be +1 of the last, accessible index!
         this->rightOffset = ld - leftOffset;
         assert(leftOffset + rightOffset == ld);
     }
@@ -160,31 +162,80 @@ public:
 
     // Getter and Setter methods
 
-    T getValue(cint x, cint y) const { return M[matrix_index(x,y,ld)]; }
-    T getValueWrapped(cint x, cint y) const { return M[matrix_index_wrapped(x,y,columns,rows,ld)]; }
-    
-    const T* getRow_ptr(int y) const { return &M.data()[matrix_index(0,y,ld)]; }
-    const T* getValue_ptr(cint x, cint y) const { return &M.data()[matrix_index(x,y,ld)]; }
-    const T* getValueWrapped_ptr(cint x, cint y) const { return &M.data()[matrix_index_wrapped(x,y,columns,rows,ld)]; }
-	
-    void setValue(T val, cint x, cint y) { M[matrix_index(x,y,ld)] = val; }
-    void setValueWrapped(T val, cint x, cint y) { M[matrix_index_wrapped(x,y,columns,rows,ld)] = val; }
-    const T * getValues() const { return M.data(); }
-    
-    int getLd() const { return this->ld; }
-    int getNumRows() const { return this->rows; }
-    int getNumCols() const { return this->columns; }
-    int getLeftOffset() const { return this->leftOffset; }
-    int getRightOffset() const { return this->rightOffset; }
+    inline T getValue(cint x, cint y) const
+    {
+        return M[matrix_index(x, y, ld)];
+    }
+
+    inline T getValueWrapped(cint x, cint y) const
+    {
+        return M[matrix_index_wrapped(x, y, columns, rows, ld)];
+    }
+
+    inline const T* getRow_ptr(int y) const
+    {
+        return &M.data()[matrix_index(0, y, ld)];
+    }
+
+    inline const T* getValue_ptr(cint x, cint y) const
+    {
+        return &M.data()[matrix_index(x, y, ld)];
+    }
+
+    inline const T* getValueWrapped_ptr(cint x, cint y) const
+    {
+        return &M.data()[matrix_index_wrapped(x, y, columns, rows, ld)];
+    }
+
+    inline void setValue(T val, cint x, cint y)
+    {
+        M[matrix_index(x, y, ld)] = val;
+    }
+
+    inline void setValueWrapped(T val, cint x, cint y)
+    {
+        M[matrix_index_wrapped(x, y, columns, rows, ld)] = val;
+    }
+
+    const T * getValues() const
+    {
+        return M.data();
+    }
+
+    int getLd() const
+    {
+        return this->ld;
+    }
+
+    int getNumRows() const
+    {
+        return this->rows;
+    }
+
+    int getNumCols() const
+    {
+        return this->columns;
+    }
+
+    int getLeftOffset() const
+    {
+        return this->leftOffset;
+    }
+
+    int getRightOffset() const
+    {
+        return this->rightOffset;
+    }
 
     // Advanced Access Methods
-    friend ostream& operator<<(ostream& out, const vectorized_matrix<T> & m )
+
+    friend ostream& operator<<(ostream& out, const vectorized_matrix<T> & m)
     {
-        for(int y = 0; y < m.columns; ++y)
+        for (int y = 0; y < m.columns; ++y)
         {
-            for(int x = 0; x < m.rows; ++x)
+            for (int x = 0; x < m.rows; ++x)
             {
-                out << m.M[matrix_index(x,y,m.ld)] << ",";
+                out << m.M[matrix_index(x, y, m.ld)] << ",";
             }
             out << endl;
         }
@@ -203,41 +254,41 @@ public:
      */
     void set_circle(cdouble center_x, cdouble center_y, cdouble r, const T v, cdouble smooth_factor, cint offset)
     {
-        assert (offset >= 0);
+        assert(offset >= 0);
         cdouble c_x = center_x + offset; // push it to the right
         cdouble c_y = center_y;
-        
-        for(int i = 0; i < ld; ++i)
+
+        for (int i = 0; i < ld; ++i)
         {
-            for(int j = 0; j < rows; ++j)
+            for (int j = 0; j < rows; ++j)
             {
                 cdouble local_x = i + 0.5;
                 cdouble local_y = j + 0.5;
-		
-		cdouble d = sqrt((local_x-c_x)*(local_x-c_x) + (local_y-c_y)*(local_y-c_y));
-		
-		/*
-		 * Calculate the interpolation weight with 
-		 * 
-		 * w(d) = max(0, min(1, (-d + r + bb) / bb))
-		 * 
-		 * We calcuate this with d (distance from center point). 
-		 * The author of reference SmoothLife implementation does exactly the same, but in an other way
-		 */
-		
-		cdouble w = smooth_factor <= 0 ? ( d <= r ? 1.0 : 0.0 ) : 1.0 / smooth_factor * (-d + r + smooth_factor);
-		cdouble weight = fmax(0, fmin(1, w));
-		T src_value = getValue(i,j);
-		T dst_value = src_value * (1.0 - weight) + v * weight;
-		
-		setValue(dst_value, i, j);
+
+                cdouble d = sqrt((local_x - c_x)*(local_x - c_x) + (local_y - c_y)*(local_y - c_y));
+
+                /*
+                 * Calculate the interpolation weight with 
+                 * 
+                 * w(d) = max(0, min(1, (-d + r + bb) / bb))
+                 * 
+                 * We calcuate this with d (distance from center point). 
+                 * The author of reference SmoothLife implementation does exactly the same, but in an other way
+                 */
+
+                cdouble w = smooth_factor <= 0 ? (d <= r ? 1.0 : 0.0) : 1.0 / smooth_factor * (-d + r + smooth_factor);
+                cdouble weight = fmax(0, fmin(1, w));
+                T src_value = getValue(i, j);
+                T dst_value = src_value * (1.0 - weight) + v * weight;
+
+                setValue(dst_value, i, j);
             }
         }
     }
 
-
-    int getNumBytesPerRow() {
-        return sizeof(T)*ld;
+    inline int getNumBytesPerRow()
+    {
+        return sizeof (T) * ld;
     }
 
     /**
@@ -248,63 +299,94 @@ public:
      */
     void set_circle(cdouble r, const T v, cdouble smooth_factor, cint offset)
     {
-        set_circle(columns/2.0, rows / 2.0, r, v, smooth_factor, offset);
+        set_circle(columns / 2.0, rows / 2.0, r, v, smooth_factor, offset);
     }
 
     /**
      * @brief sum Calculates the sum of values
      * @return
      */
-    float sum() {
+    float sum()
+    {
         float s = 0;
 
-        for(int i = 0; i < columns; ++i) {
+        for (int i = 0; i < columns; ++i)
+        {
             cint I = i*ld;
-            #pragma omp simd
-            #pragma vector aligned
-            for(int j = 0; j < rows; ++j) {
+#pragma omp simd
+#pragma vector aligned
+            for (int j = 0; j < rows; ++j)
+            {
                 s += M[j + I];
             }
         }
 
         return s;
     }
-    
-    void print_to_console() {
+
+    void print_to_console()
+    {
         cout << "matrix print:\n";
-        for (int y=0; y < this->rows; ++y) {
-            for (int x=0; x < this->ld; ++x)
-                printf((x<offset) ? "-" : ((this->getValue(x,y)==0) ? "0" : "x"), "  ");
+        for (int y = 0; y < this->rows; ++y)
+        {
+            for (int x = 0; x < this->ld; ++x)
+                printf((x < offset) ? "-" : ((this->getValue(x, y) == 0) ? "0" : "x"), "  ");
             printf("\n");
         }
         cout.flush();
     }
-    
-    void print_info() {
+
+    void print_info()
+    {
         cout << "rows: " << rows << "  cols: " << columns << "  ld: " << ld << endl;
         cout << "left: " << leftOffset << "  right: " << rightOffset << "  off: " << offset << endl;
         cout.flush();
-    } 
-};
+    }
 
+    /**
+     * @brief Overwrites the data in this matrix with data from src.
+     * @param src must have the same size as this matrix, otherwise the program will terminate!
+     */
+    void overwrite(vectorized_matrix<T> & src)
+    {
+        if (src.getNumCols() != getNumCols() || src.getNumRows() != getNumRows())
+        {
+            cerr << "Cannot overwrite matrix from matrix with different size!"<<endl;
+            exit(EXIT_FAILURE);
+        }
+
+        for (int y = 0; y < getNumRows(); ++y)
+        {
+            for (int x = 0; x < getNumCols(); ++x)
+            {
+                setValue(src.getValue(x,y),x,y);
+            }
+        }
+
+    }
+};
 
 template <typename T>
 /**
  * @brief return TRUE, if the given matrix is optimized for vectorization
  */
-bool is_vectorized_matrix(vectorized_matrix<T>* mat) {
+bool is_vectorized_matrix(vectorized_matrix<T>* mat)
+{
 
-    if (mat == NULL) {
+    if (mat == NULL)
+    {
         printf("mat is NULL!");
         return false;
     }
 
-    if (mat % ALIGNMENT != 0) {
+    if (mat % ALIGNMENT != 0)
+    {
         printf("mat is not aligned!");
         return false;
     }
 
-    if (mat->getNumBytesPerRow() % CACHELINE_SIZE != 0) {
+    if (mat->getNumBytesPerRow() % CACHELINE_SIZE != 0)
+    {
         printf("leading dimension of mat does not fit to cacheline size!");
         return false;
     }

@@ -70,11 +70,11 @@ void sdl_gui::render()
 
     //TODO: optimize access via synchronization & de-coupling
 
-    for(int x = 0; x < space->load()->getNumCols(); ++x)
+    for(int x = 0; x < space.getNumCols(); ++x)
     {
-        for(int y = 0; y < space->load()->getNumRows(); ++y)
+        for(int y = 0; y < space.getNumRows(); ++y)
         {
-            const double f = space->load()->getValue(x,y);
+            const double f = space.getValue(x,y);
 
             Uint8 a = (int)ceil(f * 255);
 
