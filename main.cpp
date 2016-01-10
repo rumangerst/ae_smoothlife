@@ -29,7 +29,7 @@ int main(int argc, char ** argv)
     {
       mpi_manager mpi(argc, argv);
       
-      cout << "Role:" << mpi.role() << endl;
+      cout << "Role:" << mpi_get_role() << endl;
     }
     catch(exception & ex)
     {
@@ -49,7 +49,7 @@ int main(int argc, char ** argv)
     {
       mpi_manager mpi(argc, argv);
       
-      cout << "Role:" << mpi.role() << endl;
+      cout << "Role:" << mpi_get_role() << endl;
     }
     catch(exception & ex)
     {

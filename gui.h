@@ -1,6 +1,6 @@
 #pragma once
 #include "simulator.h"
-#include "mpi_manager.h"
+#include "communication.h"
 
 /**
  * @brief General GUI class with MPI support
@@ -9,67 +9,73 @@ class gui
 {
 public:
 
-    gui() 
-    {        
+    gui()
+    {
     }
 
-    virtual ~gui() 
+    virtual ~gui()
     {
     }
 
     /**
      * @brief Run the GUI with a local simulator
      */
-    void run_local ( simulator * sim ) 
+    void run_local(simulator * sim)
     {
-/*#ifdef ENABLE_PERF_MEASUREMENT
+
+#ifdef ENABLE_PERF_MEASUREMENT
         auto perf_time_start = chrono::high_resolution_clock::now();
         ulong frames_start = 0;
-#endif*/
-        
+#endif
+
         //Initialize the GUI
-        if ( !initialize() ) 
+        if (!initialize())
         {
             cerr << "GUI | Error while initialization!" << endl;
+            sim->running = false;
             return;
         }
-        
+
         // predefine the space of the renderer
         space = vectorized_matrix<float>(sim->rules.get_space_width(), sim->rules.get_space_height());
-        
+
         cout << "Local GUI started ..." << endl;
 
         running = true;
 
-        while ( running ) 
+        while (running)
         {
             // Is there a new space in simulator queue? -> update renderer space then!
-            if(sim->space_queue.size() != 0)
             {
-                space.overwrite(sim->space_queue.front());
-                sim->space_queue.pop();
-            }
-            
-            update ( running );
-            render();      
-/*#ifdef ENABLE_PERF_MEASUREMENT
-                ++frames_rendered;
-                if ( frames_rendered%100 == 0 ) 
+                //lock_guard<mutex>(sim->space_queue_mutex);
+                if (sim->space_queue.size() != 0)
                 {
-                    auto perf_time_end = chrono::high_resolution_clock::now();
-                    double perf_time_seconds = chrono::duration<double> ( perf_time_end - perf_time_start ).count();
-
-                    cout << "GUI || " << ( frames_rendered - frames_start ) / perf_time_seconds << " FPS" << endl;
-
-                    frames_start = frames_rendered;
-                    perf_time_start = chrono::high_resolution_clock::now();
+                    space.overwrite(sim->space_queue.front());
+                    sim->space_queue.pop();
                 }
+            }
 
-#endif*/
+            update(running);
+            render();
+
+#ifdef ENABLE_PERF_MEASUREMENT
+            ++frames_rendered;
+            if (frames_rendered % 100 == 0)
+            {
+                auto perf_time_end = chrono::high_resolution_clock::now();
+                double perf_time_seconds = chrono::duration<double> (perf_time_end - perf_time_start).count();
+
+                cout << "GUI || " << (frames_rendered - frames_start) / perf_time_seconds << " FPS" << endl;
+
+                frames_start = frames_rendered;
+                perf_time_start = chrono::high_resolution_clock::now();
+            }
+
+#endif
         }
-        
+
         cout << "Local GUI quit." << endl;
-        
+
         // End simulator when GUI exits
         sim->running = false;
     }
@@ -77,20 +83,31 @@ public:
     /*
      * @brief Run the GUI with MPI
      */
-    void run_mpi ( mpi_manager * mgr ) 
+    void run_mpi(ruleset rules)
     {
+        //Setup MPI
+        mpi_buffer_data = aligned_vector<float>(rules.get_space_width() * rules.get_space_height() * SPACE_QUEUE_MAX_SIZE);
     }
 
 protected:
-    
+
     vectorized_matrix<float> space;
+
+    //MPI variables
+    MPI_Request mpi_status_communication;
+    MPI_Request mpi_status_data_prepare;
+    MPI_Request mpi_status_data_data;
+    aligned_vector<float> mpi_buffer_data;
+    int mpi_data_recieve_size;
+    int mpi_state_data;
+    queue<vectorized_matrix<float>> mpi_render_queue; //Not needed for local as the GUI can use the queue provided by simulator
 
     /**
      * @brief do any initialization tasks
      * @return true if initialization was successful, otherwise false
      */
     virtual bool initialize() = 0;
-    virtual void update ( bool & running ) = 0;
+    virtual void update(bool & running) = 0;
     virtual void render() = 0;
 
 private:

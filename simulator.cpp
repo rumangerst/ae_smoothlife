@@ -1,6 +1,7 @@
 #include "simulator.h"
 #include "aligned_vector.h"
 #include <assert.h>
+#include <mpi.h>
 
 /*
  * DONE:
@@ -43,7 +44,7 @@ void simulator::initialize(vectorized_matrix<float> & predefined_space)
 
     outer_masks.reserve(CACHELINE_FLOATS);
     inner_masks.reserve(CACHELINE_FLOATS);
-    
+
     initiate_masks();
     /*
     outer_mask = vectorized_matrix<float>(rules.get_ri() * 2 + 2, rules.get_ri() * 2 + 2);
@@ -57,13 +58,15 @@ void simulator::initialize(vectorized_matrix<float> & predefined_space)
     offset_from_mask_center = inner_masks[0].getLeftOffset();
     outer_mask_sum = outer_masks[0].sum(); // the sum remains the same for all masks, supposedly
     inner_mask_sum = inner_masks[0].sum();
-    
-    //TODO: test for sum over all matrices!
+
+    //TODO: test for sum over all matrices!   
+
 
     initialized = true;
 }
 
-void simulator::initiate_masks() {
+void simulator::initiate_masks()
+{
     // Initialize masks
     /* NOTE:
         - to allow vectorization, we add additional padding to the left side of the masks
@@ -72,13 +75,14 @@ void simulator::initiate_masks() {
           be aligned to the cacheline_size 64
         - at the cost of additional values to be calculated
      */
-    for (int o=0; o<CACHELINE_FLOATS; ++o) {
+    for (int o = 0; o < CACHELINE_FLOATS; ++o)
+    {
         vectorized_matrix<float> outer_mask = vectorized_matrix<float>(rules.get_ra() * 2 + 2, rules.get_ra() * 2 + 2, o);
         outer_mask.set_circle(rules.get_ri(), 1, 1, o);
         outer_masks.push_back(outer_mask);
         outer_masks[o].print_to_console();
         cout << endl;
-        
+
         // change that back later to get_ri()
         vectorized_matrix<float> inner_mask = vectorized_matrix<float>(rules.get_ra() * 2 + 2, rules.get_ra() * 2 + 2, o);
         inner_mask.set_circle(rules.get_ra(), 1, 1, o);
@@ -89,7 +93,7 @@ void simulator::initiate_masks() {
         assert(inner_masks[0].getRightOffset() == outer_masks[0].getRightOffset());
         //inner_masks[o].print_info();
         //cout << endl;
-        
+
         /*
         outer_masks.push_back(vectorized_matrix<float>(rules.get_ra() * 2 + 2, rules.get_ra() * 2 + 2));
         outer_masks[o].set_circle(rules.get_ri(), 1, 1, o);
@@ -108,7 +112,7 @@ void simulator::initiate_masks() {
 void simulator::initialize()
 {
     cout << "Default initialization ..." << endl;
-    
+
     vectorized_matrix<float> * space = new vectorized_matrix<float>(rules.get_space_width(), rules.get_space_height());
 
     if (SIMULATOR_MODE == MODE_SIMULATE || SIMULATOR_MODE == MODE_TEST_INITIALIZE)
@@ -119,7 +123,7 @@ void simulator::initialize()
     {
         initiate_masks();
         assert(!inner_masks.empty() && !outer_masks.empty());
-        
+
         //Print the two masks
         for (int x = 0; x < inner_masks[0].getNumCols(); ++x)
         {
@@ -128,7 +132,7 @@ void simulator::initialize()
                 space->setValue(inner_masks[0].getValue(x, y), x, y);
             }
         }
-        
+
         for (int x = 0; x < outer_masks[0].getNumCols(); ++x)
         {
             for (int y = 0; y < outer_masks[0].getNumRows(); ++y)
@@ -167,31 +171,34 @@ void simulator::initialize()
             }
         }
     }
-    
+
     // Give space to main initialization function
     initialize(*space);
 }
 
 void simulator::simulate_step()
 {
-    #pragma omp parallel for schedule(static,1)
+#pragma omp parallel for schedule(static,1)
     for (int x = 0; x < rules.get_space_width(); ++x)
     {
         for (int y = 0; y < rules.get_space_height(); ++y)
         {
             // get the alignment offset caused during iteration of space
-            cint off = ((x - offset_from_mask_center) >= 0) ? 
-                (x - offset_from_mask_center) % CACHELINE_FLOATS :
-                CACHELINE_FLOATS - ((offset_from_mask_center - x)); // looks ugly, right? Only important for right borders
+            cint off = ((x - offset_from_mask_center) >= 0) ?
+                    (x - offset_from_mask_center) % CACHELINE_FLOATS :
+                    CACHELINE_FLOATS - ((offset_from_mask_center - x)); // looks ugly, right? Only important for right borders
             assert(off >= 0 && off < CACHELINE_FLOATS);
 
             float n;
             float m;
-            if (optimize && (x - offset_from_mask_center) >= 0 && 
-               (x + outer_masks[off].getRightOffset() < this->space_current->getNumCols())) {
+            if (optimize && (x - offset_from_mask_center) >= 0 &&
+                    (x + outer_masks[off].getRightOffset() < this->space_current->getNumCols()))
+            {
                 n = getFilling(x, y, inner_masks[off], inner_mask_sum); // filling of inner circle
                 m = getFilling(x, y, outer_masks[off], outer_mask_sum); // filling of outer ring
-            } else {
+            }
+            else
+            {
                 n = getFilling_unoptimized(x, y, inner_masks[0], inner_mask_sum); // filling of inner circle
                 m = getFilling_unoptimized(x, y, outer_masks[0], outer_mask_sum); // filling of outer ring
             }
@@ -215,36 +222,60 @@ void simulator::run_simulation_master()
 #ifdef ENABLE_PERF_MEASUREMENT
     auto perf_time_start = chrono::high_resolution_clock::now();
     ulong perf_spacetime_start = 0;
-#endif
+#endif    
+
+    //Start recieving of app communication data
+    if (APP_MPI)
+    {
+        //Setup all MPI stuff
+        mpi_buffer_data = aligned_vector<float>(rules.get_space_width() * rules.get_space_height() * SPACE_QUEUE_MAX_SIZE); //make SPACE_QUEUE_MAX_SIZE send buffer, so we can send multiple states per batch
+        mpi_state_data = APP_MPI_STATE_DATA_IDLE;
+        app_communication_status = APP_COMMUNICATION_RUNNING;
+
+        MPI_Irecv(&app_communication_status, 1, MPI_INT, mpi_get_rank_with_role(mpi_role::USER_INTERFACE), APP_MPI_TAG_COMMUNICATION, MPI_COMM_WORLD, &mpi_status_communication);
+    }
 
 #pragma omp parallel
     {
         while (running)
         {
             // Calculate the next state if simulation is enabled
-            // Separate the actual simulation from interfacing
+            // Separate the actual simulation from interfacing            
+
             if (SIMULATOR_MODE == MODE_SIMULATE)
-                simulate_step();
-
-            // Put into queue if possible
-            while(space_queue.size() < SPACE_QUEUE_MAX_SIZE) {}
-            
-            space_queue.push(*space_current);
-
-#ifdef ENABLE_PERF_MEASUREMENT
-            // NOTE: this should be done either directly after swapping or here
-            // HACK: here is best - doesn't interrupt code-flow to much :)
-            if (spacetime % 100 == 0)
             {
-                auto perf_time_end = chrono::high_resolution_clock::now();
-                double perf_time_seconds = chrono::duration<double>(perf_time_end - perf_time_start).count();
+/*#if APP_GUI
+                lock_guard<mutex> lock(space_queue_mutex);
+#endif*/
+                if (space_queue.size() < SPACE_QUEUE_MAX_SIZE)
+                {
 
-                cout << "Simulation || " << (spacetime - perf_spacetime_start) / perf_time_seconds << " calculations / s" << endl;
+                    simulate_step();
 
-                perf_spacetime_start = spacetime;
-                perf_time_start = chrono::high_resolution_clock::now();
+                    space_queue.push(*space_current);
+
+                    if (ENABLE_PERF_MEASUREMENT)
+                    {
+                        // NOTE: this should be done either directly after swapping or here
+                        // HACK: here is best - doesn't interrupt code-flow to much :)
+                        if (spacetime % 100 == 0)
+                        {
+                            auto perf_time_end = chrono::high_resolution_clock::now();
+                            double perf_time_seconds = chrono::duration<double>(perf_time_end - perf_time_start).count();
+
+                            cout << "Simulation || " << (spacetime - perf_spacetime_start) / perf_time_seconds << " calculations / s" << endl;
+
+                            perf_spacetime_start = spacetime;
+                            perf_time_start = chrono::high_resolution_clock::now();
+                        }
+                    }
+                }
             }
-#endif
+
+            // Do MPI communication if application runs in MPI
+            if (APP_MPI)
+            {
+            }
         }
     }
 }
@@ -268,82 +299,98 @@ float simulator::getFilling(cint at_x, cint at_y, const vectorized_matrix<float>
     assert(long(sim_space) % ALIGNMENT == 0);
     assert(long(mask_space) % ALIGNMENT == 0);
     //cout << "at_x: " << at_x << "  at_y: " << at_y << "  XB: " << XB << "  XE: " << XE << endl;
-    assert((XB*sizeof(float)) % ALIGNMENT == 0 && (XE*sizeof(float)) % ALIGNMENT == 0);
+    assert((XB * sizeof (float)) % ALIGNMENT == 0 && (XE * sizeof (float)) % ALIGNMENT == 0);
 
     //NOTE: if XB or YB is negative, we do not need to check XE or YE - they have to be within the field boundaries
     float f = 0;
-    if (XB >= 0) {
-        if (XE < rules.get_space_width()) {
+    if (XB >= 0)
+    {
+        if (XE < rules.get_space_width())
+        {
             // NOTE: x accessible without wrapping
 
-            if (YB >= 0) {
-                if (YE < rules.get_space_height()) {
+            if (YB >= 0)
+            {
+                if (YE < rules.get_space_height())
+                {
                     // ideal case. no wrapping
-                    for (int y = YB; y < YE; ++y) {
+                    for (int y = YB; y < YE; ++y)
+                    {
                         cint Y = y*sim_ld;
-                        cint YB_ = (y - YB)*mask_ld - XB;
+                        cint YB_ = (y - YB) * mask_ld - XB;
                         // only activate these if you really want to check again...
                         //assert((Y+XB) % CACHELINE_FLOATS == 0);
                         //assert((YB_*sizeof(floats)) % CACHELINE_FLOATS == 0);
                         //assert(long(&sim_space[XB+Y]) % ALIGNMENT == 0);
                         //assert(long(&mask_space[XB+YB_]) % ALIGNMENT == 0);
-                        #pragma omp simd aligned(sim_space, mask_space:64)
-                        #pragma vector aligned
-                        for (int x = XB; x < XE; ++x)
-                            f += sim_space[x + Y] * mask_space[x + YB_];
-                    }
-                } else {
-
-                    // special case 2. Ideally vectorized.
-                    for (int y = YB; y < rules.get_space_height(); ++y) {
-                        cint Y = y*sim_ld;
-                        cint YB_ = (y-YB)*mask_ld - XB;
-                        #pragma omp simd aligned(sim_space, mask_space:64)
-                        #pragma vector aligned
-                        for(int x=XB; x<XE; ++x)
-                            f += sim_space[x + Y] * mask_space[x + YB_];
-                    }
-
-                    // optimized, wrapped access over the top border.
-                    for (int y = 0; y < YE - rules.get_space_height(); ++y) {
-                        cint Y = y*sim_ld;
-                        cint mask_y_off = mask.getNumRows() - (YE - rules.get_space_height());
-                        cint YB_ = (mask_y_off + y)*mask_ld - XB;
-                        //assert(long(&sim_space[XB+Y]) % ALIGNMENT == 0);
-                        //assert(long(&mask_space[XB+YB_]) % ALIGNMENT == 0);
-                        #pragma omp simd aligned(sim_space, mask_space:64)
-                        #pragma vector aligned
+#pragma omp simd aligned(sim_space, mask_space:64)
+#pragma vector aligned
                         for (int x = XB; x < XE; ++x)
                             f += sim_space[x + Y] * mask_space[x + YB_];
                     }
                 }
-            } else {
+                else
+                {
+
+                    // special case 2. Ideally vectorized.
+                    for (int y = YB; y < rules.get_space_height(); ++y)
+                    {
+                        cint Y = y*sim_ld;
+                        cint YB_ = (y - YB) * mask_ld - XB;
+#pragma omp simd aligned(sim_space, mask_space:64)
+#pragma vector aligned
+                        for (int x = XB; x < XE; ++x)
+                            f += sim_space[x + Y] * mask_space[x + YB_];
+                    }
+
+                    // optimized, wrapped access over the top border.
+                    for (int y = 0; y < YE - rules.get_space_height(); ++y)
+                    {
+                        cint Y = y*sim_ld;
+                        cint mask_y_off = mask.getNumRows() - (YE - rules.get_space_height());
+                        cint YB_ = (mask_y_off + y) * mask_ld - XB;
+                        //assert(long(&sim_space[XB+Y]) % ALIGNMENT == 0);
+                        //assert(long(&mask_space[XB+YB_]) % ALIGNMENT == 0);
+#pragma omp simd aligned(sim_space, mask_space:64)
+#pragma vector aligned
+                        for (int x = XB; x < XE; ++x)
+                            f += sim_space[x + Y] * mask_space[x + YB_];
+                    }
+                }
+            }
+            else
+            {
                 // special case 1. Ideally vectorized.
-                for (int y = 0; y < YE; ++y) {
+                for (int y = 0; y < YE; ++y)
+                {
                     cint Y = y*sim_ld;
-                    cint YB_ = (y-YB)*mask_ld - XB;
-                    #pragma omp simd aligned(sim_space, mask_space:64)
-                    #pragma vector aligned
+                    cint YB_ = (y - YB) * mask_ld - XB;
+#pragma omp simd aligned(sim_space, mask_space:64)
+#pragma vector aligned
                     for (int x = XB; x < XE; ++x)
                         f += sim_space[x + Y] * mask_space[x + YB_];
                 }
 
                 // optimized, wrapped access over the bottom border.
-                for (int y=rules.get_space_height()+YB; y<rules.get_space_height(); ++y) {
+                for (int y = rules.get_space_height() + YB; y < rules.get_space_height(); ++y)
+                {
                     cint Y = y*sim_ld;
                     cint mask_y_off = rules.get_space_height() + YB;
-                    cint YB_ = (y-mask_y_off)*mask_ld - XB;
+                    cint YB_ = (y - mask_y_off) * mask_ld - XB;
                     //assert(long(&sim_space[XB+Y]) % ALIGNMENT == 0);
                     //assert(long(&mask_space[XB+YB_]) % ALIGNMENT == 0);
-                    #pragma omp simd aligned(sim_space, mask_space:64)
-                    #pragma vector aligned
+#pragma omp simd aligned(sim_space, mask_space:64)
+#pragma vector aligned
                     for (int x = XB; x < XE; ++x)
                         f += sim_space[x + Y] * mask_space[x + YB_];
                 }
             }
-        } else if ((YB >= 0) && (YE < rules.get_space_height())) {
+        }
+        else if ((YB >= 0) && (YE < rules.get_space_height()))
+        {
             // special case 4. Non-unit strides (probably unavoidable).
-            for (int x = XB; x < rules.get_space_width(); ++x) {
+            for (int x = XB; x < rules.get_space_width(); ++x)
+            {
                 cint XB_ = x - XB;
                 for (int y = YB; y < YE; ++y)
                     f += space_current->getValue(x, y) * mask.getValue(XB_, y - YB);
@@ -351,37 +398,48 @@ float simulator::getFilling(cint at_x, cint at_y, const vectorized_matrix<float>
 
 
             // optimized, wrapped access over the right border.
-            for (int x = 0; x < (XE - rules.get_space_width()); ++x) {
+            for (int x = 0; x < (XE - rules.get_space_width()); ++x)
+            {
                 cint mask_x_off = mask.getNumCols() - (XE - rules.get_space_width());
                 for (int y = YB; y < YE; ++y)
                     f += space_current->getValue(x, y) * mask.getValue(x + mask_x_off, y - YB);
             }
-        } else {
+        }
+        else
+        {
             // hard case. use wrapped version.
-            for (int y = YB; y < YE; ++y) {
+            for (int y = YB; y < YE; ++y)
+            {
                 cint Y = y;
                 cint YB_ = y - YB;
                 for (int x = XB; x < XE; ++x)
                     f += space_current->getValueWrapped(x, Y) * mask.getValue(x - XB, YB_);
             }
         }
-    } else if ((YB >= 0) && (YE < rules.get_space_height())) {
+    }
+    else if ((YB >= 0) && (YE < rules.get_space_height()))
+    {
         // special case 3. May have non-unit stride.
-        for (int x = 0; x < XE; ++x) {
+        for (int x = 0; x < XE; ++x)
+        {
             cint XB_ = x - XB;
             for (int y = YB; y < YE; ++y)
                 f += space_current->getValue(x, y) * mask.getValue(XB_, y - YB);
         }
 
         // NOTE: XB is negative here.
-        for (int x = rules.get_space_width() + XB; x < rules.get_space_width(); ++x) {
+        for (int x = rules.get_space_width() + XB; x < rules.get_space_width(); ++x)
+        {
             cint XB_ = rules.get_space_width() + XB;
             for (int y = YB; y < YE; ++y)
                 f += space_current->getValue(x, y) * mask.getValue(x - XB_, y - YB);
         }
-    } else {
+    }
+    else
+    {
         // hard case. use wrapped version.
-        for (int y = YB; y < YE; ++y) {
+        for (int y = YB; y < YE; ++y)
+        {
             cint Y = y;
             cint YB_ = y - YB;
             for (int x = XB; x < XE; ++x)

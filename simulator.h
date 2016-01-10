@@ -11,10 +11,14 @@
 #include <random>
 #include <atomic>
 #include <chrono>
+#include <mutex>
 #include <queue>
 #include "matrix.h"
+#include "matrix_buffer.h"
 #include "ruleset.h"
 #include "aligned_vector.h"
+#include "communication.h"
+
 
 using namespace std;
 
@@ -35,7 +39,9 @@ public:
     ruleset rules;
     
     
-    queue<vectorized_matrix<float>> space_queue; // Stores all calculated spaces to be fetched by local GUI or sent by MPI
+    queue<vectorized_matrix<float>> space_queue; // Stores all calculated spaces to be fetched by local GUI or sent by MPI. 
+    //mutex space_queue_mutex; //Needed because the GUI will fetch data from the queue (local). Only use in local mode.
+    
     ulong spacetime = 0;
 
     // we need 2 masks for each unaligned space cases (to re-align it)
@@ -65,7 +71,7 @@ public:
      * @note Public because we'll need this for our tests
      */
     void simulate_step();
-    
+        
     /**
      * @brief Runs the simulation including interface with GUI as master simulator
      */
@@ -89,6 +95,15 @@ private:
 
     vectorized_matrix<float>* space_current;
     vectorized_matrix<float>* space_next;
+    
+//#if APP_MPI
+    MPI_Request mpi_status_communication;
+    MPI_Request mpi_status_data_prepare;
+    MPI_Request mpi_status_data_data;
+    aligned_vector<float> mpi_buffer_data;
+    int mpi_state_data;
+    int app_communication_status;
+//#endif
     
     void initiate_masks();
 
