@@ -17,8 +17,9 @@
  * TODO: Parallelization
  */
 
-simulator::simulator(const ruleset & r) : rules(r)
+simulator::simulator(const ruleset & r, bool use_mpi) : rules(r)
 {
+    this->use_mpi = use_mpi;
 }
 
 simulator::~simulator()
@@ -180,7 +181,7 @@ void simulator::initialize()
 
 void simulator::simulate_step()
 {
-    #pragma omp parallel for schedule(static)
+#pragma omp parallel for schedule(static)
     for (int x = 0; x < rules.get_space_width(); ++x)
     {
         for (int y = 0; y < rules.get_space_height(); ++y)
@@ -225,17 +226,17 @@ void simulator::run_simulation_master()
 #endif    
 
     //Start recieving of app communication data
-    if (APP_MPI)
+    if (use_mpi)
     {
         //Setup all MPI stuff
-        mpi_buffer_data = aligned_vector<float>(rules.get_space_width() * rules.get_space_height() * SPACE_QUEUE_MAX_SIZE); //make SPACE_QUEUE_MAX_SIZE send buffer, so we can send multiple states per batch
+        mpi_buffer_data_data = aligned_vector<float>(rules.get_space_width() * rules.get_space_height() * SPACE_QUEUE_MAX_SIZE); //make SPACE_QUEUE_MAX_SIZE send buffer, so we can send multiple states per batch
         mpi_state_data = APP_MPI_STATE_DATA_IDLE;
-        app_communication_status = APP_COMMUNICATION_RUNNING;
+        mpi_app_communication = APP_COMMUNICATION_RUNNING;
 
-        MPI_Irecv(&app_communication_status, 1, MPI_INT, mpi_get_rank_with_role(mpi_role::USER_INTERFACE), APP_MPI_TAG_COMMUNICATION, MPI_COMM_WORLD, &mpi_status_communication);
+        MPI_Irecv(&mpi_app_communication, 1, MPI_INT, mpi_get_rank_with_role(mpi_role::USER_INTERFACE), APP_MPI_TAG_COMMUNICATION, MPI_COMM_WORLD, &mpi_status_communication);
     }
-    
-    while (running)
+
+    while (running || mpi_state_data != APP_MPI_STATE_DATA_IDLE)
     {
         // Calculate the next state if simulation is enabled
         // Separate the actual simulation from interfacing            
@@ -264,28 +265,127 @@ void simulator::run_simulation_master()
             }
             else
             {
-                //cout << "Simulation || queue full!" << endl;
+                cout << "Simulation || queue full!" << endl;                
             }
         }
+        
+        cout << mpi_state_data << endl;
 
         // Do MPI communication if application runs in MPI
-        if (APP_MPI)
+        if (use_mpi)
         {
             //Communication tag. Get the data from GUI and 
-            if(mpi_test(&mpi_status_communication))
+            if (mpi_test(&mpi_status_communication))
             {
                 cout << "MPI | Recieved COMMUNICATION signal." << endl;
-                running = app_communication_status & APP_COMMUNICATION_RUNNING == APP_COMMUNICATION_RUNNING;
-                
+                running = mpi_app_communication & APP_COMMUNICATION_RUNNING == APP_COMMUNICATION_RUNNING;
+
                 // If the GUI has sent the final message (running=false), do not recieve any other message
-                if(running)
-                    MPI_Irecv(&app_communication_status, 1, MPI_INT, mpi_get_rank_with_role(mpi_role::USER_INTERFACE), APP_MPI_TAG_COMMUNICATION, MPI_COMM_WORLD, &mpi_status_communication);
+                if (running)
+                    MPI_Irecv(&mpi_app_communication, 1, MPI_INT, mpi_get_rank_with_role(mpi_role::USER_INTERFACE), APP_MPI_TAG_COMMUNICATION, MPI_COMM_WORLD, &mpi_status_communication);
                 else
                     cout << "MPI | The simulator was requested to shut down." << endl;
             }
+            
+            //Synchronous send
+            if (space->get_queue_size() != 0)
+                {
+                    //Copy queue to buffer
+                    int buffer_pos = 0;
+                    mpi_buffer_data_prepare = space->get_queue_size();
+                    
+                    //mpi_buffer_data_prepare = 1;
+
+                    for(int i = 0; i < mpi_buffer_data_prepare; ++i)
+                    {
+                        vectorized_matrix<float> M = space->queue_pop();
+
+                        for (int y = 0; y < M.getNumRows(); ++y)
+                        {
+                            for (int x = 0; x < M.getNumCols(); ++x)
+                            {
+                                mpi_buffer_data_data[buffer_pos++] = M.getValue(x, y);
+                            }
+                        }
+                    }
+                                        
+                    //Tell data size
+                    MPI_Ssend(&mpi_buffer_data_prepare,1,MPI_INT,mpi_get_rank_with_role(mpi_role::USER_INTERFACE),APP_MPI_TAG_DATA_PREPARE,MPI_COMM_WORLD);
+                    
+                    //Send
+                    //MPI_Ssend(mpi_buffer_data_data.data(), buffer_pos, MPI_FLOAT, mpi_get_rank_with_role(mpi_role::USER_INTERFACE), APP_MPI_TAG_DATA_DATA,MPI_COMM_WORLD);
+            }
+            
+
+            // Request data send if still supposed to run
+            /*if (running && mpi_state_data == APP_MPI_STATE_DATA_IDLE)
+            {
+                if (space->get_queue_size() != 0)
+                {
+                    //Copy queue to buffer
+                    int buffer_pos = 0;
+                    mpi_buffer_data_prepare = space->get_queue_size();
+
+                    while (space->get_queue_size() != 0)
+                    {
+                        vectorized_matrix<float> M = space->queue_pop();
+
+                        for (int y = 0; y < M.getNumRows(); ++y)
+                        {
+                            for (int x = 0; x < M.getNumCols(); ++x)
+                            {
+                                mpi_buffer_data_data[buffer_pos++] = M.getValue(x, y);
+                            }
+                        }
+                    }
+                    
+                    cout << "> SIM pushed "<<mpi_buffer_data_prepare << endl;
+
+                    //Send how many objects will be sent
+                    MPI_Isend(&mpi_buffer_data_prepare,
+                               1,
+                               MPI_INT,
+                               mpi_get_rank_with_role(mpi_role::USER_INTERFACE),
+                               APP_MPI_TAG_DATA_PREPARE,
+                               MPI_COMM_WORLD,
+                               &mpi_status_data_prepare);
+                    mpi_state_data = APP_MPI_STATE_DATA_PREPARE;
+                }
+                else
+                    cout << "nothing in queue" << endl;
+            }
+            else if (mpi_state_data == APP_MPI_STATE_DATA_PREPARE && mpi_test(&mpi_status_data_prepare))
+            {
+                cout << "> SIM sends data "<< endl;
+                
+                // Send the buffer
+                MPI_Isend(mpi_buffer_data_data.data(),
+                           mpi_buffer_data_prepare * rules.get_space_width() * rules.get_space_height(),
+                           MPI_FLOAT,
+                           mpi_get_rank_with_role(mpi_role::USER_INTERFACE),
+                           APP_MPI_TAG_DATA_DATA,
+                           MPI_COMM_WORLD,
+                           &mpi_status_data_data);
+                
+                MPI_Isend(mpi_buffer_data_data.data(),
+                           1,
+                           MPI_FLOAT,
+                           mpi_get_rank_with_role(mpi_role::USER_INTERFACE),
+                           APP_MPI_TAG_DATA_DATA,
+                           MPI_COMM_WORLD,
+                           &mpi_status_data_data);
+                
+                mpi_state_data = APP_MPI_STATE_DATA_DATA;
+            }
+            else if (mpi_state_data == APP_MPI_STATE_DATA_DATA && mpi_test(&mpi_status_data_data))
+            {
+                cout << "> SIM finished" << endl;
+                
+                mpi_state_data = APP_MPI_STATE_DATA_IDLE;
+            }*/
+
         }
     }
-
 }
 
 float simulator::getFilling(cint at_x, cint at_y, const vectorized_matrix<float> &mask, cfloat mask_sum)

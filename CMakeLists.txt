@@ -92,14 +92,14 @@ endif()
 # smoothlife_ui is determined by #ifdef GUI
 # smoothlife_local gets #ifdef GUI and #ifdef SIM
 # smoothlife_sim gets #ifdef SIM
-set_target_properties(smoothlife_mpi_host PROPERTIES COMPILE_FLAGS "-DAPP_GUI=true -DAPP_SIM=true  -DAPP_MPI=false -DGUI_TYPE=${GUI_TYPE}")
+set_target_properties(smoothlife_mpi_host PROPERTIES COMPILE_FLAGS "-DAPP_GUI=true -DAPP_SIM=true -DGUI_TYPE=${GUI_TYPE}")
 target_link_libraries(smoothlife_mpi_host ${SDL2_LIBRARY} ${OPENGL_gl_LIBRARY} ${OPENGL_glu_LIBRARY} ${GLEW_LIBRARIES} ${Boost_LIBRARIES})
 
-set_target_properties(smoothlife_tests PROPERTIES COMPILE_FLAGS "-DAPP_SIM=true -DAPP_GUI=false -DAPP_MPI=false")
+set_target_properties(smoothlife_tests PROPERTIES COMPILE_FLAGS "-DAPP_SIM=true -DAPP_GUI=false")
 target_link_libraries(smoothlife_tests ${Boost_LIBRARIES})
 
 if(BUILD_INTEL AND BUILD_MIC)
-  set_target_properties(smoothlife_mpi_mic PROPERTIES COMPILE_FLAGS "-DAPP_SIM=true -DAPP_GUI=false -DAPP_MPI=true -mmic")
+  set_target_properties(smoothlife_mpi_mic PROPERTIES COMPILE_FLAGS "-DAPP_SIM=true -DAPP_GUI=false -mmic")
   target_link_libraries(smoothlife_mpi_mic ${Boost_LIBRARIES})
 endif()
 

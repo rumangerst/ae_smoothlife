@@ -25,7 +25,7 @@ using namespace std;
 #define SIMULATOR_MODE MODE_SIMULATE //Set the mode of the simulator
 #define SIMULATOR_INITIALIZATION_FUNCTION space_set_splat //The function used for initialization
 
-#define SPACE_QUEUE_MAX_SIZE 8 //the queue size used by the program
+#define SPACE_QUEUE_MAX_SIZE 16 //the queue size used by the program
 
 /**
  * @brief Encapsulates the calculation of states
@@ -33,7 +33,7 @@ using namespace std;
 class simulator
 {
 public:
-    simulator(const ruleset & rules);
+    simulator(const ruleset & rules, bool use_mpi);
     ~simulator();
 
     ruleset rules;
@@ -55,6 +55,7 @@ public:
     bool initialized = false;
     bool running = false;
     bool optimize = true; //use the optimized methods
+    bool use_mpi = false;
     
 
 
@@ -96,17 +97,13 @@ public:
 
 private:
 
-    //vectorized_matrix<float>* space_current;
-    //vectorized_matrix<float>* space_next;
-    
-//#if APP_MPI
-    MPI_Request mpi_status_communication;
-    MPI_Request mpi_status_data_prepare;
-    MPI_Request mpi_status_data_data;
-    aligned_vector<float> mpi_buffer_data;
-    int mpi_state_data;
-    int app_communication_status;
-//#endif
+    MPI_Request mpi_status_communication = MPI_REQUEST_NULL;
+    MPI_Request mpi_status_data_prepare = MPI_REQUEST_NULL;
+    MPI_Request mpi_status_data_data = MPI_REQUEST_NULL;
+    aligned_vector<float> mpi_buffer_data_data;
+    int mpi_buffer_data_prepare;
+    int mpi_state_data = APP_MPI_STATE_DATA_IDLE;
+    int mpi_app_communication;
     
     void initiate_masks();
 

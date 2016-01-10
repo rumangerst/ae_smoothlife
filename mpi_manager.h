@@ -1,5 +1,8 @@
 #pragma once
 #include <mpi.h>
+#include <iostream>
+
+using namespace std;
 
 enum mpi_role
 {
@@ -28,7 +31,7 @@ enum mpi_role
 /**
  * C++ version of MPI_TEST with simplified function call
  * @param request
- * @return 
+ * @return true if operation was completed
  */
 inline bool mpi_test(MPI_Request * request)
 {
@@ -93,7 +96,7 @@ inline int mpi_get_rank_with_role(mpi_role role)
 {
     if (role == mpi_role::USER_INTERFACE)
         return 0;
-    else if (role == mpi_role::SIMULATOR_SLAVE)
+    else if (role == mpi_role::SIMULATOR_MASTER)
         return 1;
     else
         return -1;

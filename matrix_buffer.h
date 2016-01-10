@@ -92,6 +92,18 @@ public:
         //Free the lock
         spinlock_writing = false;
     }
+    
+    /**
+     * @brief returns capacity of queue
+     */
+    int get_queue_capacity()
+    {
+        while (spinlock_writing.load())
+        {
+        } //Wait until some write operation finished
+        
+        return buffer.size() - queue_size - 1;
+    }
 
     /**
      * @brief Returns the current queue size

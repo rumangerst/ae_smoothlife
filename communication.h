@@ -7,8 +7,9 @@ using namespace std;
  * MPI communication tags
  */
 #define APP_MPI_TAG_COMMUNICATION 1 // Used for status communication
-#define APP_MPI_TAG_DATA_DATA 2 // Used for sent data
-#define APP_MPI_TAG_DATA_PREPARE 3 // Used for buffer preallocation of communication recipient
+#define APP_MPI_TAG_DATA_PREPARE 2 // Used for buffer preallocation of communication recipient
+#define APP_MPI_TAG_DATA_DATA 4 // Used for sent data
+
 
 /**
  * Defines relevant for application communication channel
