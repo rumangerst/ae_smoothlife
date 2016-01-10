@@ -2,6 +2,7 @@
 #include "aligned_vector.h"
 #include <assert.h>
 #include <mpi.h>
+#include <omp.h>
 
 /*
  * DONE:
@@ -38,8 +39,8 @@ void simulator::initialize(vectorized_matrix<float> & predefined_space)
 
     cout << "Initializing ..." << endl;
 
-    space = new matrix_buffer<float>(SPACE_QUEUE_MAX_SIZE,predefined_space);
-    
+    space = new matrix_buffer<float>(SPACE_QUEUE_MAX_SIZE, predefined_space);
+
     //space_current = new vectorized_matrix<float>(predefined_space);
     //space_next = new vectorized_matrix<float>(rules.get_space_width(), rules.get_space_height());
 
@@ -178,8 +179,8 @@ void simulator::initialize()
 }
 
 void simulator::simulate_step()
-{    
-#pragma omp parallel for schedule(static,1)
+{
+    #pragma omp parallel for schedule(static)
     for (int x = 0; x < rules.get_space_width(); ++x)
     {
         for (int y = 0; y < rules.get_space_height(); ++y)
@@ -209,7 +210,7 @@ void simulator::simulate_step()
 
         }
     }
-    
+
     ++spacetime;
 }
 
@@ -233,51 +234,46 @@ void simulator::run_simulation_master()
 
         MPI_Irecv(&app_communication_status, 1, MPI_INT, mpi_get_rank_with_role(mpi_role::USER_INTERFACE), APP_MPI_TAG_COMMUNICATION, MPI_COMM_WORLD, &mpi_status_communication);
     }
-
-#pragma omp parallel
+    
+    while (running)
     {
-        while (running)
+        // Calculate the next state if simulation is enabled
+        // Separate the actual simulation from interfacing            
+
+        if (SIMULATOR_MODE == MODE_SIMULATE)
         {
-            // Calculate the next state if simulation is enabled
-            // Separate the actual simulation from interfacing            
-
-            if (SIMULATOR_MODE == MODE_SIMULATE)
+            if (space->buffer_next() != nullptr)
             {
-/*#if APP_GUI
-                lock_guard<mutex> lock(space_queue_mutex);
-#endif*/
-                if (space->buffer_next() != nullptr)
+                simulate_step();
+
+                if (ENABLE_PERF_MEASUREMENT)
                 {
-                    simulate_step();
-
-                    if (ENABLE_PERF_MEASUREMENT)
+                    // NOTE: this should be done either directly after swapping or here
+                    // HACK: here is best - doesn't interrupt code-flow to much :)
+                    if (spacetime % 100 == 0)
                     {
-                        // NOTE: this should be done either directly after swapping or here
-                        // HACK: here is best - doesn't interrupt code-flow to much :)
-                        if (spacetime % 100 == 0)
-                        {
-                            auto perf_time_end = chrono::high_resolution_clock::now();
-                            double perf_time_seconds = chrono::duration<double>(perf_time_end - perf_time_start).count();
+                        auto perf_time_end = chrono::high_resolution_clock::now();
+                        double perf_time_seconds = chrono::duration<double>(perf_time_end - perf_time_start).count();
 
-                            cout << "Simulation || " << (spacetime - perf_spacetime_start) / perf_time_seconds << " calculations / s" << endl;
+                        cout << "Simulation || " << (spacetime - perf_spacetime_start) / perf_time_seconds << " calculations / s" << endl;
 
-                            perf_spacetime_start = spacetime;
-                            perf_time_start = chrono::high_resolution_clock::now();
-                        }
+                        perf_spacetime_start = spacetime;
+                        perf_time_start = chrono::high_resolution_clock::now();
                     }
                 }
-                else
-                {
-                    cout << "Simulation || queue full!" << endl;
-                }
             }
-
-            // Do MPI communication if application runs in MPI
-            if (APP_MPI)
+            else
             {
+                cout << "Simulation || queue full!" << endl;
             }
         }
+
+        // Do MPI communication if application runs in MPI
+        if (APP_MPI)
+        {
+        }
     }
+
 }
 
 float simulator::getFilling(cint at_x, cint at_y, const vectorized_matrix<float> &mask, cfloat mask_sum)

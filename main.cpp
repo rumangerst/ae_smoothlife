@@ -72,14 +72,22 @@ int main(int argc, char ** argv)
 
     GUI_TYPE g;
     
-    #pragma omp parallel
-    {
-        printf("OMP: Number of threads available: %i\n", omp_get_max_threads());
-        #pragma omp single nowait
-        g.run_local(&s);
+    // Enable nested threads
+    omp_set_nested(1);
+    
+    #pragma omp parallel sections
+    {       
+        #pragma omp section
+        {
+            cout << "GUI is in thread "<<omp_get_thread_num() << endl;
+            g.run_local(&s);
+        }
 
-        #pragma omp single nowait
-        s.run_simulation_master();
+        #pragma omp section
+        {
+            cout << "Simulator is in thread "<<omp_get_thread_num() << endl;
+            s.run_simulation_master();
+        }
     }
 
     return 0;
