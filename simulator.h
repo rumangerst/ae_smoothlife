@@ -25,7 +25,7 @@ using namespace std;
 #define SIMULATOR_MODE MODE_SIMULATE //Set the mode of the simulator
 #define SIMULATOR_INITIALIZATION_FUNCTION space_set_splat //The function used for initialization
 
-#define SPACE_QUEUE_MAX_SIZE 32 //the queue size used by the program
+#define SPACE_QUEUE_MAX_SIZE 8 //the queue size used by the program
 
 /**
  * @brief Encapsulates the calculation of states
@@ -39,7 +39,7 @@ public:
     ruleset rules;
     
     
-    queue<vectorized_matrix<float>> space_queue; // Stores all calculated spaces to be fetched by local GUI or sent by MPI. 
+    matrix_buffer<float> * space; // Stores all calculated spaces to be fetched by local GUI or sent by MPI. 
     //mutex space_queue_mutex; //Needed because the GUI will fetch data from the queue (local). Only use in local mode.
     
     ulong spacetime = 0;
@@ -88,13 +88,13 @@ public:
      */
     vectorized_matrix<float> get_current_space()
     {
-        return vectorized_matrix<float>(*space_current);
+        return vectorized_matrix<float>(*space->buffer_read_ptr());
     }
 
 private:
 
-    vectorized_matrix<float>* space_current;
-    vectorized_matrix<float>* space_next;
+    //vectorized_matrix<float>* space_current;
+    //vectorized_matrix<float>* space_next;
     
 //#if APP_MPI
     MPI_Request mpi_status_communication;
@@ -272,7 +272,7 @@ private:
 
     inline float next_step_as_euler(cint x, cint y, cfloat n, cfloat m)
     {
-        return space_current->getValue(x,y) + rules.get_dt() * discrete_as_euler(n,m);
+        return space->buffer_read_ptr()->getValue(x,y) + rules.get_dt() * discrete_as_euler(n,m);
     }
 
     /**

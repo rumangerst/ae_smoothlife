@@ -46,13 +46,10 @@ public:
         while (running)
         {
             // Is there a new space in simulator queue? -> update renderer space then!
+
+            if (sim->space->get_queue_size() != 0)
             {
-                //lock_guard<mutex>(sim->space_queue_mutex);
-                if (sim->space_queue.size() != 0)
-                {
-                    space.overwrite(sim->space_queue.front());
-                    sim->space_queue.pop();
-                }
+                sim->space->queue_pop_to(space);
             }
 
             update(running);
