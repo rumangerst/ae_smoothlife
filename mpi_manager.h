@@ -53,6 +53,17 @@ inline int mpi_rank()
 }
 
 /**
+ * @brief Returns the size of MPI_COMM_WORLD
+ * @return 
+ */
+inline int mpi_comm_size()
+{
+    int s;
+    MPI_Comm_size(MPI_COMM_WORLD, &s);
+    return s;
+}
+
+/**
  * @brief Returns the role of the given MPI rank
  * @param mpi_comm_rank
  * @author Ruman

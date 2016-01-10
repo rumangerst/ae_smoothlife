@@ -9,13 +9,9 @@ class gui
 {
 public:
 
-    gui()
-    {
-    }
+    gui() { }
 
-    virtual ~gui()
-    {
-    }
+    virtual ~gui() { }
 
     /**
      * @brief Run the GUI with a local simulator
@@ -84,6 +80,50 @@ public:
     {
         //Setup MPI
         mpi_buffer_data = aligned_vector<float>(rules.get_space_width() * rules.get_space_height() * SPACE_QUEUE_MAX_SIZE);
+        app_communication_status = APP_COMMUNICATION_RUNNING;
+
+        //Initialize the GUI
+        if (initialize())
+        {
+
+            // predefine the space of the renderer
+            space = vectorized_matrix<float>(rules.get_space_width(), rules.get_space_height());
+
+            cout << "MPI GUI started ..." << endl;
+
+            bool running = true;
+
+            while (running)
+            {
+                // Is there a new space in simulator queue? -> update renderer space then!
+
+                /*if (sim->space->get_queue_size() != 0)
+                {
+                    sim->space->queue_pop_to(space);
+                }*/
+
+                update(running);
+                render();
+            }
+
+            cout << "MPI GUI quit." << endl;
+        }
+        else
+        {
+            cerr << "GUI | Error while initialization!" << endl;
+        }
+        
+        //MPI shutdown
+        app_communication_status &= ~APP_COMMUNICATION_RUNNING; //disable "running"
+
+        //Wait until any async communication is finished
+        while(mpi_test(&mpi_status_communication)) 
+        {
+            cout << "GUI | Shutdown is waiting for open communication channel ..." << endl;
+        }
+        
+        //Send the shutdown synchronous + blocking to prevent too early destruction of class
+        MPI_Ssend(&app_communication_status,1,MPI_INT,mpi_get_rank_with_role(mpi_role::SIMULATOR_MASTER),APP_MPI_TAG_COMMUNICATION,MPI_COMM_WORLD);
     }
 
 protected:
@@ -97,6 +137,7 @@ protected:
     aligned_vector<float> mpi_buffer_data;
     int mpi_data_recieve_size;
     int mpi_state_data;
+    int app_communication_status;
     queue<vectorized_matrix<float>> mpi_render_queue; //Not needed for local as the GUI can use the queue provided by simulator
 
     /**

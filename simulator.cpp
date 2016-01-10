@@ -264,13 +264,25 @@ void simulator::run_simulation_master()
             }
             else
             {
-                cout << "Simulation || queue full!" << endl;
+                //cout << "Simulation || queue full!" << endl;
             }
         }
 
         // Do MPI communication if application runs in MPI
         if (APP_MPI)
         {
+            //Communication tag. Get the data from GUI and 
+            if(mpi_test(&mpi_status_communication))
+            {
+                cout << "MPI | Recieved COMMUNICATION signal." << endl;
+                running = app_communication_status & APP_COMMUNICATION_RUNNING == APP_COMMUNICATION_RUNNING;
+                
+                // If the GUI has sent the final message (running=false), do not recieve any other message
+                if(running)
+                    MPI_Irecv(&app_communication_status, 1, MPI_INT, mpi_get_rank_with_role(mpi_role::USER_INTERFACE), APP_MPI_TAG_COMMUNICATION, MPI_COMM_WORLD, &mpi_status_communication);
+                else
+                    cout << "MPI | The simulator was requested to shut down." << endl;
+            }
         }
     }
 
