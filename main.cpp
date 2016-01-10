@@ -22,9 +22,20 @@
 
 using namespace std;
 
+/**
+ * Set some necessary settings for openmp
+ */
+void setup_openmp()
+{
+    // Enable nested threads
+    omp_set_nested(1);
+}
+
 #if !APP_GUI && APP_SIM
 int main(int argc, char ** argv)
 {
+    setup_openmp();
+    
     try
     {
       mpi_manager mpi(argc, argv);
@@ -45,6 +56,8 @@ int main(int argc, char ** argv)
 #if APP_GUI && !APP_SIM
 int main(int argc, char ** argv)
 {
+    setup_openmp();
+    
     try
     {
       mpi_manager mpi(argc, argv);
@@ -72,8 +85,7 @@ int main(int argc, char ** argv)
 
     GUI_TYPE g;
     
-    // Enable nested threads
-    omp_set_nested(1);
+    setup_openmp();   
     
     #pragma omp parallel sections
     {       
