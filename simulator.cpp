@@ -47,14 +47,6 @@ void simulator::initialize(vectorized_matrix<float> & predefined_space)
     inner_masks.reserve(CACHELINE_FLOATS);
     
     initiate_masks();
-    /*
-    outer_mask = vectorized_matrix<float>(rules.get_ri() * 2 + 2, rules.get_ri() * 2 + 2);
-    inner_mask = vectorized_matrix<float>(rules.get_ra() * 2 + 2, rules.get_ra() * 2 + 2);
-
-    outer_mask.set_circle(rules.get_ri(), 1, 1);
-    inner_mask.set_circle(rules.get_ra(), 1, 1);
-    inner_mask.set_circle(rules.get_ri(), 0, 1);
-     */
 
     offset_from_mask_center = inner_masks[0].getLeftOffset();
     outer_mask_sum = outer_masks[0].sum(); // the sum remains the same for all masks, supposedly
@@ -90,20 +82,6 @@ void simulator::initiate_masks() {
         assert(inner_masks[0].getLeftOffset() == outer_masks[0].getLeftOffset());
         assert(inner_masks[0].getRightOffset() == outer_masks[0].getRightOffset());
         //inner_masks[o].print_info();
-        //cout << endl;
-        
-        /*
-        outer_masks.push_back(vectorized_matrix<float>(rules.get_ra() * 2 + 2, rules.get_ra() * 2 + 2));
-        outer_masks[o].set_circle(rules.get_ri(), 1, 1, o);
-        
-        // change that back later to get_ri()
-        inner_masks.push_back(vectorized_matrix<float>(rules.get_ra() * 2 + 2, rules.get_ra() * 2 + 2));
-        inner_masks[o].set_circle(rules.get_ra(), 1, 1, o);
-        inner_masks[o].set_circle(rules.get_ri(), 0, 1, o);
-        assert(inner_masks[0].getLd() == outer_masks[0].getLd());
-        assert(inner_masks[0].getLeftOffset() == outer_masks[0].getLeftOffset());
-        assert(inner_masks[0].getRightOffset() == outer_masks[0].getRightOffset());
-         */
     }
 }
 
@@ -313,7 +291,7 @@ float simulator::getFilling(cint at_x, cint at_y, const vectorized_matrix<float>
                     }
                 } else {
 
-                    // special case 2. Ideally vectorized.
+                    // special case 2. Ideally vectorized. Access over bottom border
                     for (int y = YB; y < rules.get_space_height(); ++y) {
                         cint Y = y*sim_ld;
                         cint YB_ = (y-YB)*mask_ld - XB;
@@ -337,7 +315,7 @@ float simulator::getFilling(cint at_x, cint at_y, const vectorized_matrix<float>
                     }
                 }
             } else {
-                // special case 1. Ideally vectorized.
+                // special case 1. Ideally vectorized. Access over top border
                 for (int y = 0; y < YE; ++y) {
                     cint Y = y*sim_ld;
                     cint YB_ = (y-YB)*mask_ld - XB;
@@ -361,19 +339,22 @@ float simulator::getFilling(cint at_x, cint at_y, const vectorized_matrix<float>
                 }
             }
         } else if ((YB >= 0) && (YE < rules.get_space_height())) {
-            // special case 4. Non-unit strides (probably unavoidable).
-            for (int x = XB; x < rules.get_space_width(); ++x) {
-                cint XB_ = x - XB;
-                for (int y = YB; y < YE; ++y)
-                    f += space_current->getValue(x, y) * mask.getValue(XB_, y - YB);
+            // special case 4. Access of right border
+            for (int y = YB; y < YE; ++y) {
+                cint Y = y*sim_ld;
+                cint YB_ = (y-YB)*mask_ld - XB;
+                for (int x = XB; x < rules.get_space_width(); ++x)
+                    f += sim_space[x + Y] * mask_space[x + YB_];
             }
 
-
-            // optimized, wrapped access over the right border.
-            for (int x = 0; x < (XE - rules.get_space_width()); ++x) {
-                cint mask_x_off = mask.getNumCols() - (XE - rules.get_space_width());
-                for (int y = YB; y < YE; ++y)
-                    f += space_current->getValue(x, y) * mask.getValue(x + mask_x_off, y - YB);
+            // optimized, wrapped access over the right border. Effective offset: 0!
+            for (int y = YB; y < YE; ++y) {
+                cint Y = y*sim_ld;
+                cint mask_x_off = mask.getNumCols() - (XE - rules.get_space_width()); 
+                cint YB_ = mask_x_off + (y - YB) * mask_ld;
+                for (int x = 0; x < (XE - rules.get_space_width()); ++x)
+                    f += sim_space[x + Y] * mask_space[x + YB_];
+                    //f += space_current->getValue(x, y) * mask.getValue(x + mask_x_off, y - YB);
             }
         } else {
             // hard case. use wrapped version.
@@ -385,18 +366,23 @@ float simulator::getFilling(cint at_x, cint at_y, const vectorized_matrix<float>
             }
         }
     } else if ((YB >= 0) && (YE < rules.get_space_height())) {
-        // special case 3. May have non-unit stride.
-        for (int x = 0; x < XE; ++x) {
-            cint XB_ = x - XB;
-            for (int y = YB; y < YE; ++y)
-                f += space_current->getValue(x, y) * mask.getValue(XB_, y - YB);
+        // special case 3. Access over left border
+        for (int y = YB; y < YE; ++y) {
+            cint Y = y*sim_ld;
+            cint YB_ = (y-YB)*mask_ld - XB;
+            for (int x = 0; x < XE; ++x)
+                f += sim_space[x + Y] * mask_space[x + YB_];
+                //f += space_current->getValue(x, y) * mask.getValue(x - XB, y - YB);
         }
 
         // NOTE: XB is negative here.
-        for (int x = rules.get_space_width() + XB; x < rules.get_space_width(); ++x) {
+        for (int y = YB; y < YE; ++y) {
+            cint Y = y*sim_ld;
             cint XB_ = rules.get_space_width() + XB;
-            for (int y = YB; y < YE; ++y)
-                f += space_current->getValue(x, y) * mask.getValue(x - XB_, y - YB);
+            cint YB_ = (y-YB) * mask_ld - XB_;
+            for (int x = rules.get_space_width() + XB; x < rules.get_space_width(); ++x)
+                f += sim_space[x + Y] * mask_space[x + YB_];
+                //f += space_current->getValue(x, y) * mask.getValue(x - XB_, y - YB);
         }
     } else {
         // hard case. use wrapped version.
@@ -404,7 +390,7 @@ float simulator::getFilling(cint at_x, cint at_y, const vectorized_matrix<float>
             cint Y = y;
             cint YB_ = y - YB;
             for (int x = XB; x < XE; ++x)
-                f += space_current->getValueWrapped(x, Y) * mask.getValue(x - XB, YB_);
+                f += space_current->getValueWrapped(x, y) * mask.getValue(x - XB, YB_);
         }
     }
 
