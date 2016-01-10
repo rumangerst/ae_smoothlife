@@ -178,9 +178,7 @@ void simulator::initialize()
 }
 
 void simulator::simulate_step()
-{
-    vectorized_matrix<float> * space_next = space->buffer_write_ptr();
-    
+{    
 #pragma omp parallel for schedule(static,1)
     for (int x = 0; x < rules.get_space_width(); ++x)
     {
@@ -195,7 +193,7 @@ void simulator::simulate_step()
             float n;
             float m;
             if (optimize && (x - offset_from_mask_center) >= 0 &&
-                    (x + outer_masks[off].getRightOffset() < this->space->buffer_read_ptr()->getNumCols()))
+                    (x + outer_masks[off].getRightOffset() < this->space_current->getNumCols()))
             {
                 n = getFilling(x, y, inner_masks[off], inner_mask_sum); // filling of inner circle
                 m = getFilling(x, y, outer_masks[off], outer_mask_sum); // filling of outer ring
@@ -293,9 +291,9 @@ float simulator::getFilling(cint at_x, cint at_y, const vectorized_matrix<float>
     cint YB = at_y - mask.getNumRows() / 2; // aka y_begin
     cint YE = at_y + mask.getNumRows() / 2; // aka y_end
 
-    cint sim_ld = space->buffer_read_ptr()->getLd();
+    cint sim_ld = space_current->getLd();
     cint mask_ld = mask.getLd();
-    const float* const __restrict__ sim_space = this->space->buffer_read_ptr()->getValues();
+    const float* const __restrict__ sim_space = this->space_current->getValues();
     const float* const __restrict__ mask_space = mask.getValues();
 
     assert(long(sim_space) % ALIGNMENT == 0);
@@ -395,7 +393,7 @@ float simulator::getFilling(cint at_x, cint at_y, const vectorized_matrix<float>
             {
                 cint XB_ = x - XB;
                 for (int y = YB; y < YE; ++y)
-                    f += space->buffer_read_ptr()->getValue(x, y) * mask.getValue(XB_, y - YB);
+                    f += space_current->getValue(x, y) * mask.getValue(XB_, y - YB);
             }
 
 
@@ -404,7 +402,7 @@ float simulator::getFilling(cint at_x, cint at_y, const vectorized_matrix<float>
             {
                 cint mask_x_off = mask.getNumCols() - (XE - rules.get_space_width());
                 for (int y = YB; y < YE; ++y)
-                    f += space->buffer_read_ptr()->getValue(x, y) * mask.getValue(x + mask_x_off, y - YB);
+                    f += space_current->getValue(x, y) * mask.getValue(x + mask_x_off, y - YB);
             }
         }
         else
@@ -415,7 +413,7 @@ float simulator::getFilling(cint at_x, cint at_y, const vectorized_matrix<float>
                 cint Y = y;
                 cint YB_ = y - YB;
                 for (int x = XB; x < XE; ++x)
-                    f += space->buffer_read_ptr()->getValueWrapped(x, Y) * mask.getValue(x - XB, YB_);
+                    f += space_current->getValueWrapped(x, Y) * mask.getValue(x - XB, YB_);
             }
         }
     }
@@ -426,7 +424,7 @@ float simulator::getFilling(cint at_x, cint at_y, const vectorized_matrix<float>
         {
             cint XB_ = x - XB;
             for (int y = YB; y < YE; ++y)
-                f += space->buffer_read_ptr()->getValue(x, y) * mask.getValue(XB_, y - YB);
+                f += space_current->getValue(x, y) * mask.getValue(XB_, y - YB);
         }
 
         // NOTE: XB is negative here.
@@ -434,7 +432,7 @@ float simulator::getFilling(cint at_x, cint at_y, const vectorized_matrix<float>
         {
             cint XB_ = rules.get_space_width() + XB;
             for (int y = YB; y < YE; ++y)
-                f += space->buffer_read_ptr()->getValue(x, y) * mask.getValue(x - XB_, y - YB);
+                f += space_current->getValue(x, y) * mask.getValue(x - XB_, y - YB);
         }
     }
     else
@@ -445,7 +443,7 @@ float simulator::getFilling(cint at_x, cint at_y, const vectorized_matrix<float>
             cint Y = y;
             cint YB_ = y - YB;
             for (int x = XB; x < XE; ++x)
-                f += space->buffer_read_ptr()->getValueWrapped(x, Y) * mask.getValue(x - XB, YB_);
+                f += space_current->getValueWrapped(x, Y) * mask.getValue(x - XB, YB_);
         }
     }
 
@@ -470,7 +468,7 @@ float simulator::getFilling_unoptimized(cint at_x, cint at_y, const vectorized_m
             cint Y_BEG = y - YB;
             for (int x = XB; x < XE; ++x)
             {
-                f += space->buffer_read_ptr()->getValue(x, Y) * mask.getValue(x - XB, Y_BEG);
+                f += space_current->getValue(x, Y) * mask.getValue(x - XB, Y_BEG);
             }
         }
     }
@@ -482,7 +480,7 @@ float simulator::getFilling_unoptimized(cint at_x, cint at_y, const vectorized_m
             cint Y_BEG = y - YB;
             for (int x = XB; x < XE; ++x)
             {
-                f += space->buffer_read_ptr()->getValueWrapped(x, Y) * mask.getValue(x - XB, Y_BEG);
+                f += space_current->getValueWrapped(x, Y) * mask.getValue(x - XB, Y_BEG);
             }
         }
     }

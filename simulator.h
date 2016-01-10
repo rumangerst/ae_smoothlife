@@ -40,7 +40,8 @@ public:
     
     
     matrix_buffer<float> * space; // Stores all calculated spaces to be fetched by local GUI or sent by MPI. 
-    //mutex space_queue_mutex; //Needed because the GUI will fetch data from the queue (local). Only use in local mode.
+    #define space_current space->buffer_read_ptr() //Redirect space_current to the read pointer provided by matrix_buffer
+    #define space_next space->buffer_write_ptr() //redirect space_next to the write pointer provided by matrix_buffer
     
     ulong spacetime = 0;
 
@@ -54,6 +55,8 @@ public:
     bool initialized = false;
     bool running = false;
     bool optimize = true; //use the optimized methods
+    
+
 
     /**
      * @brief Initializes all necessary fields. Initializes field with default initialization function
@@ -88,7 +91,7 @@ public:
      */
     vectorized_matrix<float> get_current_space()
     {
-        return vectorized_matrix<float>(*space->buffer_read_ptr());
+        return vectorized_matrix<float>(*space_current);
     }
 
 private:
@@ -272,7 +275,7 @@ private:
 
     inline float next_step_as_euler(cint x, cint y, cfloat n, cfloat m)
     {
-        return space->buffer_read_ptr()->getValue(x,y) + rules.get_dt() * discrete_as_euler(n,m);
+        return space_current->getValue(x,y) + rules.get_dt() * discrete_as_euler(n,m);
     }
 
     /**
