@@ -33,7 +33,7 @@ using namespace std;
 class simulator
 {
 public:
-    simulator(const ruleset & rules, bool use_mpi);
+    simulator(const ruleset & rules);
     ~simulator();
 
     ruleset rules;
@@ -54,9 +54,7 @@ public:
 
     bool initialized = false;
     bool running = false;
-    bool optimize = true; //use the optimized methods
-    bool use_mpi = false;
-    
+    bool optimize = true; //use the optimized methods    
 
 
     /**
@@ -75,6 +73,11 @@ public:
      * @note Public because we'll need this for our tests
      */
     void simulate_step();
+    
+    /**
+     * @brief Runs this simulation local without any MPI communication
+     */
+    void run_simulation_local();
         
     /**
      * @brief Runs the simulation including interface with GUI as master simulator
@@ -96,14 +99,6 @@ public:
     }
 
 private:
-
-    MPI_Request mpi_status_communication = MPI_REQUEST_NULL;
-    MPI_Request mpi_status_data_prepare = MPI_REQUEST_NULL;
-    MPI_Request mpi_status_data_data = MPI_REQUEST_NULL;
-    aligned_vector<float> mpi_buffer_data_data;
-    int mpi_buffer_data_prepare;
-    int mpi_state_data = APP_MPI_STATE_DATA_IDLE;
-    int mpi_app_communication;
     
     void initiate_masks();
 

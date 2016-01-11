@@ -17,14 +17,13 @@
  * TODO: Parallelization
  */
 
-simulator::simulator(const ruleset & r, bool use_mpi) : rules(r)
+simulator::simulator(const ruleset & r) : rules(r)
 {
-    this->use_mpi = use_mpi;
 }
 
 simulator::~simulator()
 {
-    if (initialized)
+    if (space != nullptr)
     {
         delete space;
     }
@@ -215,9 +214,58 @@ void simulator::simulate_step()
     ++spacetime;
 }
 
+void simulator::run_simulation_local()
+{
+    cout << "Simulator | Running local simulator ..." << endl;
+    running = true;
+
+#ifdef ENABLE_PERF_MEASUREMENT
+    auto perf_time_start = chrono::high_resolution_clock::now();
+    ulong perf_spacetime_start = 0;
+#endif
+
+    while (running)
+    {
+        if (SIMULATOR_MODE == MODE_SIMULATE)
+        {
+            /**
+             * Simulate only the first time or when the buffer_queue can enqueue the current read buffer.
+             */
+            if (spacetime == 0 || space->push())
+            {
+                simulate_step();
+
+                if (ENABLE_PERF_MEASUREMENT)
+                {
+                    // NOTE: this should be done either directly after swapping or here
+                    // HACK: here is best - doesn't interrupt code-flow to much :)
+                    if (spacetime % 100 == 0)
+                    {
+                        auto perf_time_end = chrono::high_resolution_clock::now();
+                        double perf_time_seconds = chrono::duration<double>(perf_time_end - perf_time_start).count();
+
+                        cout << "Simulator | " << (spacetime - perf_spacetime_start) / perf_time_seconds << " calculations / s" << endl;
+
+                        perf_spacetime_start = spacetime;
+                        perf_time_start = chrono::high_resolution_clock::now();
+                    }
+                }
+            }
+            else
+            {
+                cout << "Simulator | queue full!" << endl;
+            }
+        }
+    }
+
+    cout << "Simulator | Local simulator shut down." << endl;
+
+
+}
+
 void simulator::run_simulation_master()
 {
-    cout << "Running ..." << endl;
+    cout << "Simulator | Running MPI Master simulator ..." << endl;
     running = true;
 
 #ifdef ENABLE_PERF_MEASUREMENT
@@ -225,16 +273,13 @@ void simulator::run_simulation_master()
     ulong perf_spacetime_start = 0;
 #endif    
 
-    //Start recieving of app communication data
-    if (use_mpi)
-    {
-        //Setup all MPI stuff
-        mpi_buffer_data_data = aligned_vector<float>(rules.get_space_width() * rules.get_space_height() * SPACE_QUEUE_MAX_SIZE); //make SPACE_QUEUE_MAX_SIZE send buffer, so we can send multiple states per batch
-        mpi_state_data = APP_MPI_STATE_DATA_IDLE;
-        mpi_app_communication = APP_COMMUNICATION_RUNNING;
-
-        MPI_Irecv(&mpi_app_communication, 1, MPI_INT, mpi_get_rank_with_role(mpi_role::USER_INTERFACE), APP_MPI_TAG_COMMUNICATION, MPI_COMM_WORLD, &mpi_status_communication);
-    }
+    MPI_Request mpi_status_communication = MPI_REQUEST_NULL;
+    MPI_Request mpi_status_data_prepare = MPI_REQUEST_NULL;
+    MPI_Request mpi_status_data_data = MPI_REQUEST_NULL;
+    aligned_vector<float> mpi_buffer_data_data = aligned_vector<float>(rules.get_space_width() * rules.get_space_height() * SPACE_QUEUE_MAX_SIZE); //make SPACE_QUEUE_MAX_SIZE send buffer, so we can send multiple states per batch
+    int mpi_buffer_data_prepare = 0;
+    int mpi_state_data = APP_MPI_STATE_DATA_IDLE;
+    int mpi_app_communication = APP_COMMUNICATION_RUNNING;
 
     while (running || mpi_state_data != APP_MPI_STATE_DATA_IDLE)
     {
@@ -259,7 +304,7 @@ void simulator::run_simulation_master()
                         auto perf_time_end = chrono::high_resolution_clock::now();
                         double perf_time_seconds = chrono::duration<double>(perf_time_end - perf_time_start).count();
 
-                        cout << "Simulation || " << (spacetime - perf_spacetime_start) / perf_time_seconds << " calculations / s" << endl;
+                        cout << "Simulator | " << (spacetime - perf_spacetime_start) / perf_time_seconds << " calculations / s" << endl;
 
                         perf_spacetime_start = spacetime;
                         perf_time_start = chrono::high_resolution_clock::now();
@@ -268,123 +313,80 @@ void simulator::run_simulation_master()
             }
             else
             {
-                cout << "Simulation || queue full!" << endl;                
+                //cout << "Simulation || queue full!" << endl;
             }
         }
 
-        // Do MPI communication if application runs in MPI
-        if (use_mpi)
+        //cout << "Simulation || state " << mpi_state_data << endl;
+
+
+        //Communication tag. Get the data from GUI and 
+        if (mpi_test(&mpi_status_communication))
         {
-            //Communication tag. Get the data from GUI and 
-            if (mpi_test(&mpi_status_communication))
-            {
-                cout << "MPI | Recieved COMMUNICATION signal." << endl;
-                running = mpi_app_communication & APP_COMMUNICATION_RUNNING == APP_COMMUNICATION_RUNNING;
+            cout << "MPI | Recieved COMMUNICATION signal." << endl;
+            running = mpi_app_communication & APP_COMMUNICATION_RUNNING == APP_COMMUNICATION_RUNNING;
 
-                // If the GUI has sent the final message (running=false), do not recieve any other message
-                if (running)
-                    MPI_Irecv(&mpi_app_communication, 1, MPI_INT, mpi_get_rank_with_role(mpi_role::USER_INTERFACE), APP_MPI_TAG_COMMUNICATION, MPI_COMM_WORLD, &mpi_status_communication);
-                else
-                    cout << "MPI | The simulator was requested to shut down." << endl;
+            // If the GUI has sent the final message (running=false), do not recieve any other message
+            if (running)
+                MPI_Irecv(&mpi_app_communication, 1, MPI_INT, mpi_get_rank_with_role(mpi_role::USER_INTERFACE), APP_MPI_TAG_COMMUNICATION, MPI_COMM_WORLD, &mpi_status_communication);
+            else
+                cout << "MPI | The simulator was requested to shut down." << endl;
+        }
+
+        // Request data send if still supposed to run
+        if (running && mpi_state_data == APP_MPI_STATE_DATA_IDLE)
+        {
+            //Copy queue to buffer          
+            int data_size = rules.get_space_width() * rules.get_space_height();
+            int data_count = 0;
+
+            while (space->size() != 0)
+            {
+                space->pop(&mpi_buffer_data_data.data()[data_count * data_size]);
+                ++data_count;
             }
-            
-            //Synchronous send
-            /*if (!space->empty())
-                {
-                    //Copy queue to buffer
-                    int buffer_pos = 0;
-                    mpi_buffer_data_prepare = space->get_queue_size();
-                    
-                    //mpi_buffer_data_prepare = 1;
 
-                    for(int i = 0; i < mpi_buffer_data_prepare; ++i)
-                    {
-                        vectorized_matrix<float> M = space->queue_pop();
-
-                        for (int y = 0; y < M.getNumRows(); ++y)
-                        {
-                            for (int x = 0; x < M.getNumCols(); ++x)
-                            {
-                                mpi_buffer_data_data[buffer_pos++] = M.getValue(x, y);
-                            }
-                        }
-                    }
-                                        
-                    //Tell data size
-                    MPI_Ssend(&mpi_buffer_data_prepare,1,MPI_INT,mpi_get_rank_with_role(mpi_role::USER_INTERFACE),APP_MPI_TAG_DATA_PREPARE,MPI_COMM_WORLD);
-                    
-                    //Send
-                    //MPI_Ssend(mpi_buffer_data_data.data(), buffer_pos, MPI_FLOAT, mpi_get_rank_with_role(mpi_role::USER_INTERFACE), APP_MPI_TAG_DATA_DATA,MPI_COMM_WORLD);
-            }*/
-            
-
-            // Request data send if still supposed to run
-            /*if (running && mpi_state_data == APP_MPI_STATE_DATA_IDLE)
+            if (data_count != 0)
             {
-                if (space->get_queue_size() != 0)
-                {
-                    //Copy queue to buffer
-                    int buffer_pos = 0;
-                    mpi_buffer_data_prepare = space->get_queue_size();
+                mpi_buffer_data_prepare = data_size * data_count;
+                mpi_buffer_data_prepare = 1;
+                
+                cout << "> SIM pushed " << mpi_buffer_data_prepare << endl;
 
-                    while (space->get_queue_size() != 0)
-                    {
-                        vectorized_matrix<float> M = space->queue_pop();
-
-                        for (int y = 0; y < M.getNumRows(); ++y)
-                        {
-                            for (int x = 0; x < M.getNumCols(); ++x)
-                            {
-                                mpi_buffer_data_data[buffer_pos++] = M.getValue(x, y);
-                            }
-                        }
-                    }
-                    
-                    cout << "> SIM pushed "<<mpi_buffer_data_prepare << endl;
-
-                    //Send how many objects will be sent
-                    MPI_Isend(&mpi_buffer_data_prepare,
-                               1,
-                               MPI_INT,
-                               mpi_get_rank_with_role(mpi_role::USER_INTERFACE),
-                               APP_MPI_TAG_DATA_PREPARE,
-                               MPI_COMM_WORLD,
-                               &mpi_status_data_prepare);
-                    mpi_state_data = APP_MPI_STATE_DATA_PREPARE;
-                }
-                else
-                    cout << "nothing in queue" << endl;
+                //Send how many objects will be sent
+                MPI_Isend(&mpi_buffer_data_prepare,
+                          1,
+                          MPI_INT,
+                          mpi_get_rank_with_role(mpi_role::USER_INTERFACE),
+                          APP_MPI_TAG_DATA_PREPARE,
+                          MPI_COMM_WORLD,
+                          &mpi_status_data_prepare);
+                mpi_state_data = APP_MPI_STATE_DATA_PREPARE;
             }
-            else if (mpi_state_data == APP_MPI_STATE_DATA_PREPARE && mpi_test(&mpi_status_data_prepare))
-            {
-                cout << "> SIM sends data "<< endl;
-                
-                // Send the buffer
-                MPI_Isend(mpi_buffer_data_data.data(),
-                           mpi_buffer_data_prepare * rules.get_space_width() * rules.get_space_height(),
-                           MPI_FLOAT,
-                           mpi_get_rank_with_role(mpi_role::USER_INTERFACE),
-                           APP_MPI_TAG_DATA_DATA,
-                           MPI_COMM_WORLD,
-                           &mpi_status_data_data);
-                
-                MPI_Isend(mpi_buffer_data_data.data(),
-                           1,
-                           MPI_FLOAT,
-                           mpi_get_rank_with_role(mpi_role::USER_INTERFACE),
-                           APP_MPI_TAG_DATA_DATA,
-                           MPI_COMM_WORLD,
-                           &mpi_status_data_data);
-                
-                mpi_state_data = APP_MPI_STATE_DATA_DATA;
-            }
-            else if (mpi_state_data == APP_MPI_STATE_DATA_DATA && mpi_test(&mpi_status_data_data))
-            {
-                cout << "> SIM finished" << endl;
-                
-                mpi_state_data = APP_MPI_STATE_DATA_IDLE;
-            }*/
+        }
+        else if (mpi_state_data == APP_MPI_STATE_DATA_PREPARE && mpi_test(&mpi_status_data_prepare))
+        {
+            int send_size = mpi_buffer_data_prepare;            
+          
+            cout << "> SIM sends data :" << send_size << endl;
 
+
+            // Send the buffer
+            MPI_Isend(mpi_buffer_data_data.data(),
+                      send_size,
+                      MPI_FLOAT,
+                      mpi_get_rank_with_role(mpi_role::USER_INTERFACE),
+                      APP_MPI_TAG_DATA_DATA,
+                      MPI_COMM_WORLD,
+                      &mpi_status_data_data);
+
+            mpi_state_data = APP_MPI_STATE_DATA_DATA;
+        }
+        else if (mpi_state_data == APP_MPI_STATE_DATA_DATA && mpi_test(&mpi_status_data_data))
+        {
+            cout << "> SIM finished" << endl;
+
+            mpi_state_data = APP_MPI_STATE_DATA_IDLE;
         }
     }
 }

@@ -46,7 +46,60 @@ public:
 
         update_buffer_pointers();
     }
+    
+    /**
+     * Pop first item of queue into nothing.
+     * @return 
+     */
+    bool pop()
+    {
+        if (queue_size == 0)
+        {
+            return false;
+        }
+        
+        //shrink the queue by 1
+        queue_start = wrap_index(queue_start + 1);
+        queue_size = queue_size - 1;
 
+        return true;
+    }
+
+    /**
+     * @brief Pop first item of queue into raw float array. Data is row major with ld = columns
+     * @param dst
+     * @return 
+     */
+    bool pop(float * dst)
+    {
+        if (queue_size == 0)
+        {
+            return false;
+        }
+
+        int w = buffer[0].getNumCols();
+        int h = buffer[0].getNumRows();
+
+        for (int y = 0; y < h; ++y)
+        {
+            for (int x = 0; x < w; ++x)
+            {
+                dst[x + y * w] = buffer[queue_start].getValue(x, y);
+            }
+        }
+
+        //shrink the queue by 1
+        queue_start = wrap_index(queue_start + 1);
+        queue_size = queue_size - 1;
+
+        return true;
+    }
+
+    /**
+     * @brief Pop first item in queue to destination matrix.
+     * @param dst
+     * @return 
+     */
     bool pop(vectorized_matrix<T> & dst)
     {
         if (queue_size == 0)
@@ -69,11 +122,11 @@ public:
     bool push()
     {
         int expected = queue_size;
-        
+
         if (expected < queue_max_size)
-        {            
+        {
             if (queue_size.compare_exchange_strong(expected, expected + 1)) //Increase queue size if it did not change yet
-            {                
+            {
                 buffer_read = wrap_index(buffer_read + 1); //Move to next read index
                 update_buffer_pointers();
 
@@ -109,13 +162,31 @@ public:
     {
         return queue_size == 0;
     }
-    
+
     /**
      * @brief Returns size of queue. use with caution in parallel environment.
      */
     int size()
     {
         return queue_size;
+    }
+    
+    /**
+     * @brief Returns max. size of this queue.
+     * @return 
+     */
+    int max_size()
+    {
+        return queue_max_size;
+    }
+    
+    /**
+     * @brief returns how many more items can be put into this queue.
+     * @return 
+     */
+    int capacity_left()
+    {
+        return queue_max_size - queue_size;
     }
 
 private:

@@ -113,11 +113,11 @@ SCENARIO("Test optimized simulation: Initialize at center", "[simulator]")
         {
             ruleset rules = ruleset_smooth_life_l(space.getNumCols(), space.getNumRows());
 
-            simulator unoptimized_simulator = simulator(rules, false);
+            simulator unoptimized_simulator = simulator(rules);
             unoptimized_simulator.optimize = false;
             unoptimized_simulator.initialize(space);
 
-            simulator optimized_simulator = simulator(rules, false);
+            simulator optimized_simulator = simulator(rules);
             optimized_simulator.optimize = true;
             optimized_simulator.initialize(space);
 
@@ -170,11 +170,11 @@ TEST_CASE("Test optimized simulation: Initialize at left/right border", "[simula
         {
             ruleset rules = ruleset_smooth_life_l(space.getNumCols(), space.getNumRows());
 
-            simulator unoptimized_simulator = simulator(rules, false);
+            simulator unoptimized_simulator = simulator(rules);
             unoptimized_simulator.optimize = false;
             unoptimized_simulator.initialize(space);
 
-            simulator optimized_simulator = simulator(rules, false);
+            simulator optimized_simulator = simulator(rules);
             optimized_simulator.optimize = true;
             optimized_simulator.initialize(space);
 
@@ -227,11 +227,11 @@ TEST_CASE("Test optimized simulation: Initialize at top/bottom border", "[simula
         {
             ruleset rules = ruleset_smooth_life_l(space.getNumCols(), space.getNumRows());
 
-            simulator unoptimized_simulator = simulator(rules, false);
+            simulator unoptimized_simulator = simulator(rules);
             unoptimized_simulator.optimize = false;
             unoptimized_simulator.initialize(space);
 
-            simulator optimized_simulator = simulator(rules, false);
+            simulator optimized_simulator = simulator(rules);
             optimized_simulator.optimize = true;
             optimized_simulator.initialize(space);
 

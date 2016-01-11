@@ -32,7 +32,7 @@ void setup_openmp()
 int run_local(int argc, char ** argv)
 {
     ruleset rules = ruleset_from_cli(argc, argv);
-    simulator s(rules, false);
+    simulator s(rules);
     s.initialize();
 
     GUI_TYPE g;
@@ -48,7 +48,7 @@ int run_local(int argc, char ** argv)
 #pragma omp section
         {
             cout << "Simulator is in thread " << omp_get_thread_num() << endl;
-            s.run_simulation_master();
+            s.run_simulation_local();
         }
     }
 
@@ -83,7 +83,7 @@ int run_simulator(int argc, char ** argv)
     }
 
     ruleset rules = ruleset_from_cli(argc, argv);
-    simulator s(rules, true);
+    simulator s(rules);
     s.initialize();
     s.run_simulation_master();
 
@@ -97,8 +97,7 @@ int main(int argc, char ** argv)
     try
     {
         mpi_manager mpi(argc, argv);
-        cout << "MPI | Role: " << mpi_get_role() << endl;
-
+        
         if (mpi_comm_size() == 1)
         {
 #if APP_GUI
