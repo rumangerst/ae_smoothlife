@@ -154,18 +154,13 @@ public:
                     }
 
                     // Move data into queue
-                    /*for(int i = 0; i < input_count; ++i)
+                    for(int i = 0; i < input_count; ++i)
                     {
-                        float * src = &mpi_buffer_data_data.data()[i * rules.get_space_width() * rules.get_space_height()];
-                        
-                        if(!mpi_render_queue->push())
-                        {
-                            cerr << "MPI render queue could not make space for new data!" << endl;
-                            exit(EXIT_FAILURE);
-                        }
+                        float * src = &mpi_buffer_data_data.data()[i * rules.get_space_width() * rules.get_space_height()]; 
                         
                         vectorized_matrix<float> * dst = mpi_render_queue->buffer_write_ptr();
                         
+                        //Write the data into write buffer
                         for(int y = 0; y < dst->getNumRows(); ++y)
                         {
                             for(int x = 0; x < dst->getNumCols(); ++x)
@@ -173,7 +168,14 @@ public:
                                 dst->setValue(src[matrix_index(x,y,dst->getNumCols())],x,y);
                             }
                         }
-                    }*/
+                        
+                        //Push read buffer into the queue
+                        if(!mpi_render_queue->push())
+                        {
+                            cerr << "MPI render queue could not make space for new data!" << endl;
+                            exit(EXIT_FAILURE);
+                        }
+                    }
 
                     mpi_state_data = APP_MPI_STATE_DATA_IDLE;
                 }
