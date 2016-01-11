@@ -40,7 +40,7 @@ void simulator::initialize(vectorized_matrix<float> & predefined_space)
 
     cout << "Initializing ..." << endl;
 
-    space = new matrix_buffer<float>(SPACE_QUEUE_MAX_SIZE, predefined_space);
+    space = new matrix_buffer_queue<float>(SPACE_QUEUE_MAX_SIZE, predefined_space);
 
     //space_current = new vectorized_matrix<float>(predefined_space);
     //space_next = new vectorized_matrix<float>(rules.get_space_width(), rules.get_space_height());
@@ -83,8 +83,8 @@ void simulator::initiate_masks()
         vectorized_matrix<float> outer_mask = vectorized_matrix<float>(rules.get_ra() * 2 + 2, rules.get_ra() * 2 + 2, o);
         outer_mask.set_circle(rules.get_ri(), 1, 1, o);
         outer_masks.push_back(outer_mask);
-        outer_masks[o].print_to_console();
-        cout << endl;
+        //outer_masks[o].print_to_console();
+        //cout << endl;
 
         // change that back later to get_ri()
         vectorized_matrix<float> inner_mask = vectorized_matrix<float>(rules.get_ra() * 2 + 2, rules.get_ra() * 2 + 2, o);
@@ -243,7 +243,10 @@ void simulator::run_simulation_master()
 
         if (SIMULATOR_MODE == MODE_SIMULATE)
         {
-            if (space->buffer_next() != nullptr)
+            /**
+             * Simulate only the first time or when the buffer_queue can enqueue the current read buffer.
+             */
+            if (spacetime == 0 || space->push())
             {
                 simulate_step();
 
@@ -268,8 +271,6 @@ void simulator::run_simulation_master()
                 cout << "Simulation || queue full!" << endl;                
             }
         }
-        
-        cout << mpi_state_data << endl;
 
         // Do MPI communication if application runs in MPI
         if (use_mpi)
@@ -288,7 +289,7 @@ void simulator::run_simulation_master()
             }
             
             //Synchronous send
-            if (space->get_queue_size() != 0)
+            /*if (!space->empty())
                 {
                     //Copy queue to buffer
                     int buffer_pos = 0;
@@ -314,7 +315,7 @@ void simulator::run_simulation_master()
                     
                     //Send
                     //MPI_Ssend(mpi_buffer_data_data.data(), buffer_pos, MPI_FLOAT, mpi_get_rank_with_role(mpi_role::USER_INTERFACE), APP_MPI_TAG_DATA_DATA,MPI_COMM_WORLD);
-            }
+            }*/
             
 
             // Request data send if still supposed to run

@@ -45,12 +45,8 @@ public:
 
         while (running)
         {
-            // Is there a new space in simulator queue? -> update renderer space then!
-
-            if (sim->space->get_queue_size() != 0)
-            {
-                sim->space->queue_pop_to(space);
-            }
+            // Try to pop queue to current space
+            sim->space->pop(space);
 
             update(running);
             render();
@@ -95,7 +91,7 @@ public:
             space = vectorized_matrix<float>(rules.get_space_width(), rules.get_space_height());
             
             // Initialize the render queue
-            mpi_render_queue = new matrix_buffer<float>(SPACE_QUEUE_MAX_SIZE, space);
+            mpi_render_queue = new matrix_buffer_queue<float>(SPACE_QUEUE_MAX_SIZE, space);
 
             cout << "MPI GUI started ..." << endl;
 
@@ -104,10 +100,7 @@ public:
             while (running || mpi_state_data != APP_MPI_STATE_DATA_IDLE)
             {          
                 //Update current space if needed
-                if(mpi_render_queue->get_queue_size() != 0)   
-                {
-                    mpi_render_queue->queue_pop_to(space);
-                }
+                mpi_render_queue->pop(space);
                 
                 update(running);
                 render();            
@@ -205,7 +198,7 @@ protected:
     int mpi_buffer_data_prepare;
     int mpi_state_data = APP_MPI_STATE_DATA_IDLE;
     int mpi_app_communication;
-    matrix_buffer<float> * mpi_render_queue = nullptr; //Not needed for local as the GUI can use the queue provided by simulator
+    matrix_buffer_queue<float> * mpi_render_queue = nullptr; //Not needed for local as the GUI can use the queue provided by simulator
 
     /**
      * @brief do any initialization tasks

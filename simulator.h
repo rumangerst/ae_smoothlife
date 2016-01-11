@@ -14,7 +14,7 @@
 #include <mutex>
 #include <queue>
 #include "matrix.h"
-#include "matrix_buffer.h"
+#include "matrix_buffer_queue.h"
 #include "ruleset.h"
 #include "aligned_vector.h"
 #include "communication.h"
@@ -39,7 +39,7 @@ public:
     ruleset rules;
     
     
-    matrix_buffer<float> * space; // Stores all calculated spaces to be fetched by local GUI or sent by MPI. 
+    matrix_buffer_queue<float> * space; // Stores all calculated spaces to be fetched by local GUI or sent by MPI. 
     #define space_current space->buffer_read_ptr() //Redirect space_current to the read pointer provided by matrix_buffer
     #define space_next space->buffer_write_ptr() //redirect space_next to the write pointer provided by matrix_buffer
     
