@@ -123,10 +123,10 @@ public:
                     if (mpi_buffer_data_prepare % (rules.get_space_width() * rules.get_space_height()) != 0)
                     {
                         cerr << "MPI Error | GUI recieved invalid data count." << endl;
-                        //exit(EXIT_FAILURE);
+                        exit(EXIT_FAILURE);
                     }
 
-                    cout << "s -- ircv-data" << endl;
+                    //cout << "s -- ircv-data" << endl;
                     MPI_Irecv(mpi_buffer_data_data.data(),
                               mpi_buffer_data_prepare,
                               MPI_FLOAT,
@@ -134,12 +134,12 @@ public:
                               APP_MPI_TAG_DATA_DATA,
                               MPI_COMM_WORLD,
                               &mpi_status_data_data);
-                    cout << "##s -- ircv-data" << endl;
+                    //cout << "##s -- ircv-data" << endl;
                     mpi_state_data = APP_MPI_STATE_DATA_DATA;
                     
-                    cout << "bgt" << endl;
-                    cout << "test:" << mpi_test(&mpi_status_data_data) << endl;
-                    cout << "egt" << endl;
+                    //cout << "bgt" << endl;
+                    //cout << "test:" << mpi_test(&mpi_status_data_data) << endl;
+                    //cout << "egt" << endl;
                 }
                 else if (mpi_state_data == APP_MPI_STATE_DATA_DATA && mpi_test(&mpi_status_data_data))
                 {

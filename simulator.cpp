@@ -349,7 +349,7 @@ void simulator::run_simulation_master()
             if (data_count != 0)
             {
                 mpi_buffer_data_prepare = data_size * data_count;
-                mpi_buffer_data_prepare = 1;
+                //mpi_buffer_data_prepare = 1;
                 
                 cout << "> SIM pushed " << mpi_buffer_data_prepare << endl;
 
