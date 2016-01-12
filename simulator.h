@@ -27,6 +27,7 @@ using namespace std;
 #define SIMULATOR_INITIALIZATION_FUNCTION space_set_splat //The function used for initialization
 
 #define SPACE_QUEUE_MAX_SIZE 16 //the queue size used by the program
+#define USE_PEELED false
 
 /**
  * @brief Encapsulates the calculation of states
@@ -291,6 +292,20 @@ private:
      */
     float getFilling(cint at_x, cint at_y, const vector<vectorized_matrix<float>> &masks, cint offset, cfloat mask_sum);
 
+    /**
+     * @brief calculates the area around the point (x,y) based on the mask & normalizes it by mask_sum
+     * - this version allows peel loops. We speed up a little
+     * - speed test required!
+     * - edit: peeled is about 2 frames behind on my pc
+     * @param at_x space x-coordinate
+     * @param at_y space y-coordinate
+     * @param mask a non-sparsed matrix with target set [0,1]
+     * @param mask_sum the sum of all values in the given matrix (the maximal, obtainable value of this function)
+     * @return a float with a value in [0,1]
+     * @author Bastian
+     */
+    float getFilling_peeled(cint at_x, cint at_y, const vector<vectorized_matrix<float>> &masks, cint offset, cfloat mask_sum);
+    
     /**
      * @brief calculates the area around the point (x,y) based on the mask & normalizes it by mask_sum
      * USEFUL FOR TESTING THE CORRECTNIS OF OPTIMIZED CODE! KEEP THIS!
