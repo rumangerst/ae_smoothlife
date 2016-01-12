@@ -85,7 +85,7 @@ bool ogl_gui::load()
     }
 
     // load texture
-    space_texture.loadFromMatrix ( space->load() );
+    space_texture.loadFromMatrix ( &space );
 
     return true;
 }
@@ -153,10 +153,10 @@ void ogl_gui::render()
 
     glLoadIdentity();
 
-    space_texture.loadFromMatrix ( space->load() );
+    space_texture.loadFromMatrix ( &space );
 
-    cdouble w = space->load()->getNumCols();
-    cdouble h = space->load()->getNumRows();
+    cdouble w = space.getNumCols();
+    cdouble h = space.getNumRows();
     cdouble scale = fmin ( sdl_window_w / w, sdl_window_h / h );
     cdouble sw = scale * w;
     cdouble sh = scale * h;

@@ -1,6 +1,8 @@
 #include "simulator.h"
 #include "aligned_vector.h"
 #include <assert.h>
+#include <mpi.h>
+#include <omp.h>
 
 /*
  * DONE:
@@ -17,15 +19,13 @@
 
 simulator::simulator(const ruleset & r) : rules(r)
 {
-    new_space_available.store(false);
 }
 
 simulator::~simulator()
 {
-    if (initialized)
+    if (space != nullptr)
     {
-        delete space_current;
-        delete space_next;
+        delete space;
     }
 }
 
@@ -39,25 +39,28 @@ void simulator::initialize(vectorized_matrix<float> & predefined_space)
 
     cout << "Initializing ..." << endl;
 
-    space_current = new vectorized_matrix<float>(predefined_space);
-    space_next = new vectorized_matrix<float>(rules.get_space_width(), rules.get_space_height());
-    space_of_renderer.store(space_current);
+    space = new matrix_buffer_queue<float>(SPACE_QUEUE_MAX_SIZE, predefined_space);
+
+    //space_current = new vectorized_matrix<float>(predefined_space);
+    //space_next = new vectorized_matrix<float>(rules.get_space_width(), rules.get_space_height());
 
     outer_masks.reserve(CACHELINE_FLOATS);
     inner_masks.reserve(CACHELINE_FLOATS);
-    
+
     initiate_masks();
 
     offset_from_mask_center = inner_masks[0].getLeftOffset();
     outer_mask_sum = outer_masks[0].sum(); // the sum remains the same for all masks, supposedly
     inner_mask_sum = inner_masks[0].sum();
-    
-    //TODO: test for sum over all matrices!
+
+    //TODO: test for sum over all matrices!   
+
 
     initialized = true;
 }
 
-void simulator::initiate_masks() {
+void simulator::initiate_masks()
+{
     // Initialize masks
     /* NOTE:
         - to allow vectorization, we add additional padding to the left side of the masks
@@ -67,7 +70,8 @@ void simulator::initiate_masks() {
         - we may still accept peel loops. this will be determined during advanced
           performance testing
      */
-    for (int o=0; o<CACHELINE_FLOATS; ++o) {
+    for (int o = 0; o < CACHELINE_FLOATS; ++o)
+    {
         vectorized_matrix<float> outer_mask = vectorized_matrix<float>(rules.get_ra() * 2 + 2, rules.get_ra() * 2 + 2, o);
         outer_mask.set_circle(rules.get_ri(), 1, 1, o);
         outer_masks.push_back(outer_mask);
@@ -89,7 +93,7 @@ void simulator::initiate_masks() {
 void simulator::initialize()
 {
     cout << "Default initialization ..." << endl;
-    
+
     vectorized_matrix<float> * space = new vectorized_matrix<float>(rules.get_space_width(), rules.get_space_height());
 
     if (SIMULATOR_MODE == MODE_SIMULATE || SIMULATOR_MODE == MODE_TEST_INITIALIZE)
@@ -100,7 +104,7 @@ void simulator::initialize()
     {
         initiate_masks();
         assert(!inner_masks.empty() && !outer_masks.empty());
-        
+
         //Print the two masks
         for (int x = 0; x < inner_masks[0].getNumCols(); ++x)
         {
@@ -109,7 +113,7 @@ void simulator::initialize()
                 space->setValue(inner_masks[0].getValue(x, y), x, y);
             }
         }
-        
+
         for (int x = 0; x < outer_masks[0].getNumCols(); ++x)
         {
             for (int y = 0; y < outer_masks[0].getNumRows(); ++y)
@@ -148,22 +152,22 @@ void simulator::initialize()
             }
         }
     }
-    
+
     // Give space to main initialization function
     initialize(*space);
 }
 
 void simulator::simulate_step()
 {
-    #pragma omp parallel for schedule(static,1)
+#pragma omp parallel for schedule(static)
     for (int x = 0; x < rules.get_space_width(); ++x)
     {
         for (int y = 0; y < rules.get_space_height(); ++y)
         {
             // get the alignment offset caused during iteration of space
-            cint off = ((x - offset_from_mask_center) >= 0) ? 
-                (x - offset_from_mask_center) % CACHELINE_FLOATS :
-                CACHELINE_FLOATS - ((offset_from_mask_center - x)); // looks ugly, right? Only important for right borders
+            cint off = ((x - offset_from_mask_center) >= 0) ?
+                    (x - offset_from_mask_center) % CACHELINE_FLOATS :
+                    CACHELINE_FLOATS - ((offset_from_mask_center - x)); // looks ugly, right? Only important for right borders
             assert(off >= 0 && off < CACHELINE_FLOATS);
 
             float n;
@@ -184,14 +188,12 @@ void simulator::simulate_step()
         }
     }
 
-    //Swap fields
-    std::swap(space_current, space_next);
     ++spacetime;
 }
 
-void simulator::run_simulation_master()
+void simulator::run_simulation_local()
 {
-    cout << "Running ..." << endl;
+    cout << "Simulator | Running local simulator ..." << endl;
     running = true;
 
 #ifdef ENABLE_PERF_MEASUREMENT
@@ -199,53 +201,176 @@ void simulator::run_simulation_master()
     ulong perf_spacetime_start = 0;
 #endif
 
-#pragma omp parallel
+    while (running)
     {
-        while (running)
+        if (SIMULATOR_MODE == MODE_SIMULATE)
         {
-            // Calculate the next state if simulation is enabled
-            // Separate the actual simulation from interfacing
-            if (SIMULATOR_MODE == MODE_SIMULATE)
+            /**
+             * Simulate only the first time or when the buffer_queue can enqueue the current read buffer.
+             */
+            if (spacetime == 0 || space->push())
+            {
                 simulate_step();
 
-            /*
-             * NOTE: Start of synchronization
-             * - the master simulator (and all others) waits for the renderer to finish drawing the last image
-             * - it then blocks the renderer from continuing until "space_current" has been passed over
-             * - HACK: deep copy would make it so much simpler :o
-             */
-            if (WAIT_FOR_RENDERING)
-            {
-                //TODO: may catch a signal from MPI (from the renderer) in the future & only the gui machine has to do that
-                //HACK: in case of double buffer, we can already swap, but need to wait until rendering finished
-                //HACK: if we use triple buffering, 2 time steps may be calculated before calculation threads start to idle!
-                this->new_space_available = true; // prevent renderer from continuing after finishing the current image
-                while (! * this->is_space_drawn_once_by_renderer && running)
+                if (ENABLE_PERF_MEASUREMENT)
                 {
-                } // wait for renderer... !!! always add check for "running"
+                    // NOTE: this should be done either directly after swapping or here
+                    // HACK: here is best - doesn't interrupt code-flow to much :)
+                    if (spacetime % 100 == 0)
+                    {
+                        auto perf_time_end = chrono::high_resolution_clock::now();
+                        double perf_time_seconds = chrono::duration<double>(perf_time_end - perf_time_start).count();
+
+                        cout << "Simulator | " << (spacetime - perf_spacetime_start) / perf_time_seconds << " calculations / s" << endl;
+
+                        perf_spacetime_start = spacetime;
+                        perf_time_start = chrono::high_resolution_clock::now();
+                    }
+                }
             }
-
-            space_of_renderer.store(space_current); //Tell outside (e.g. renderer)
-            *this->is_space_drawn_once_by_renderer = false;
-            this->new_space_available = false;
-            /* NOTE: End of syncro */
-
-#ifdef ENABLE_PERF_MEASUREMENT
-            // NOTE: this should be done either directly after swapping or here
-            // HACK: here is best - doesn't interrupt code-flow to much :)
-            if (spacetime % 100 == 0)
+            else
             {
-                auto perf_time_end = chrono::high_resolution_clock::now();
-                double perf_time_seconds = chrono::duration<double>(perf_time_end - perf_time_start).count();
-
-                cout << "Simulation || " << (spacetime - perf_spacetime_start) / perf_time_seconds << " calculations / s" << endl;
-
-                perf_spacetime_start = spacetime;
-                perf_time_start = chrono::high_resolution_clock::now();
+//                cout << "Simulator | queue full!" << endl;
             }
-#endif
         }
     }
+
+    cout << "Simulator | Local simulator shut down." << endl;
+
+
+}
+
+void simulator::run_simulation_master()
+{
+    cout << "Simulator | Running MPI Master simulator ..." << endl;
+    running = true;
+
+#ifdef ENABLE_PERF_MEASUREMENT
+    auto perf_time_start = chrono::high_resolution_clock::now();
+    ulong perf_spacetime_start = 0;
+#endif    
+
+    MPI_Request mpi_status_communication = MPI_REQUEST_NULL;
+    MPI_Request mpi_status_data_prepare = MPI_REQUEST_NULL;
+    MPI_Request mpi_status_data_data = MPI_REQUEST_NULL;
+    aligned_vector<float> mpi_buffer_data_data = aligned_vector<float>(rules.get_space_width() * rules.get_space_height() * SPACE_QUEUE_MAX_SIZE); //make SPACE_QUEUE_MAX_SIZE send buffer, so we can send multiple states per batch
+    int mpi_buffer_data_prepare = 0;
+    int mpi_state_data = APP_MPI_STATE_DATA_IDLE;
+    int mpi_app_communication = APP_COMMUNICATION_RUNNING;
+
+    while (running)
+    {
+        // Calculate the next state if simulation is enabled
+        // Separate the actual simulation from interfacing            
+
+        if (SIMULATOR_MODE == MODE_SIMULATE)
+        {
+            /**
+             * Simulate only the first time or when the buffer_queue can enqueue the current read buffer.
+             */
+            if (spacetime == 0 || space->push())
+            {
+                simulate_step();
+
+                if (ENABLE_PERF_MEASUREMENT)
+                {
+                    // NOTE: this should be done either directly after swapping or here
+                    // HACK: here is best - doesn't interrupt code-flow to much :)
+                    if (spacetime % 100 == 0)
+                    {
+                        auto perf_time_end = chrono::high_resolution_clock::now();
+                        double perf_time_seconds = chrono::duration<double>(perf_time_end - perf_time_start).count();
+
+                        cout << "Simulator | " << (spacetime - perf_spacetime_start) / perf_time_seconds << " calculations / s" << endl;
+
+                        perf_spacetime_start = spacetime;
+                        perf_time_start = chrono::high_resolution_clock::now();
+                    }
+                }
+            }
+            else
+            {
+                //cout << "Simulation || queue full!" << endl;
+            }
+        }
+
+        //cout << "Simulation || state " << mpi_state_data << endl;
+
+
+        //Communication tag. Get the data from GUI and 
+        if (running && mpi_test(&mpi_status_communication))
+        {
+            cout << "MPI | Recieved COMMUNICATION signal." << endl;
+            running = (mpi_app_communication & APP_COMMUNICATION_RUNNING) == APP_COMMUNICATION_RUNNING;
+
+            // If the GUI has sent the final message (running=false), do not recieve any other message
+            if (running)
+                MPI_Irecv(&mpi_app_communication, 1, MPI_INT, mpi_get_rank_with_role(mpi_role::USER_INTERFACE), APP_MPI_TAG_COMMUNICATION, MPI_COMM_WORLD, &mpi_status_communication);
+            else
+                cout << "MPI | The simulator was requested to shut down." << endl;
+        }
+
+        // Request data send if still supposed to run
+        if (running && mpi_state_data == APP_MPI_STATE_DATA_IDLE)
+        {
+            //Copy queue to buffer          
+            int data_size = rules.get_space_width() * rules.get_space_height();
+            int data_count = 0;
+
+            while (space->size() != 0)
+            {
+                space->pop(&mpi_buffer_data_data.data()[data_count * data_size]);
+                ++data_count;
+            }
+
+            if (data_count != 0)
+            {
+                mpi_buffer_data_prepare = data_size * data_count;
+                //mpi_buffer_data_prepare = 1;
+                
+                cout << "> SIM pushed " << mpi_buffer_data_prepare << endl;
+
+                //Send how many objects will be sent
+                MPI_Isend(&mpi_buffer_data_prepare,
+                          1,
+                          MPI_INT,
+                          mpi_get_rank_with_role(mpi_role::USER_INTERFACE),
+                          APP_MPI_TAG_DATA_PREPARE,
+                          MPI_COMM_WORLD,
+                          &mpi_status_data_prepare);
+                mpi_state_data = APP_MPI_STATE_DATA_PREPARE;
+            }
+        }
+        else if (mpi_state_data == APP_MPI_STATE_DATA_PREPARE && mpi_test(&mpi_status_data_prepare))
+        {
+            int send_size = mpi_buffer_data_prepare;            
+          
+            cout << "> SIM sends data :" << send_size << endl;
+
+
+            // Send the buffer
+            MPI_Isend(mpi_buffer_data_data.data(),
+                      send_size,
+                      MPI_FLOAT,
+                      mpi_get_rank_with_role(mpi_role::USER_INTERFACE),
+                      APP_MPI_TAG_DATA_DATA,
+                      MPI_COMM_WORLD,
+                      &mpi_status_data_data);
+
+            mpi_state_data = APP_MPI_STATE_DATA_DATA;
+        }
+        else if (mpi_state_data == APP_MPI_STATE_DATA_DATA && mpi_test(&mpi_status_data_data))
+        {
+            cout << "> SIM finished" << endl;
+
+            mpi_state_data = APP_MPI_STATE_DATA_IDLE;
+        }        
+    }
+    
+    //Cancel all MPI requests that are still active
+    mpi_cancel_if_needed(&mpi_status_communication);
+    mpi_cancel_if_needed(&mpi_status_data_prepare);
+    mpi_cancel_if_needed(&mpi_status_data_data);
 }
 
 float simulator::getFilling(cint at_x, cint at_y, const vector<vectorized_matrix<float>> &masks, cint offset, cfloat mask_sum)
@@ -267,20 +392,25 @@ float simulator::getFilling(cint at_x, cint at_y, const vector<vectorized_matrix
     assert(long(sim_space) % ALIGNMENT == 0);
     assert(long(mask_space) % ALIGNMENT == 0);
     //cout << "at_x: " << at_x << "  at_y: " << at_y << "  XB: " << XB << "  XE: " << XE << endl;
-    assert((XB*sizeof(float)) % ALIGNMENT == 0 && (XE*sizeof(float)) % ALIGNMENT == 0);
+    assert((XB * sizeof (float)) % ALIGNMENT == 0 && (XE * sizeof (float)) % ALIGNMENT == 0);
 
     //NOTE: if XB or YB is negative, we do not need to check XE or YE - they have to be within the field boundaries
     float f = 0;
-    if (XB >= 0) {
-        if (XE < rules.get_space_width()) {
+    if (XB >= 0)
+    {
+        if (XE < rules.get_space_width())
+        {
             // NOTE: x accessible without wrapping
 
-            if (YB >= 0) {
-                if (YE < rules.get_space_height()) {
+            if (YB >= 0)
+            {
+                if (YE < rules.get_space_height())
+                {
                     // ideal case. no wrapping
-                    for (int y = YB; y < YE; ++y) {
+                    for (int y = YB; y < YE; ++y)
+                    {
                         cint Y = y*sim_ld;
-                        cint YB_ = (y - YB)*mask_ld - XB;
+                        cint YB_ = (y - YB) * mask_ld - XB;
                         // only activate these if you really want to check again...
                         //assert((Y+XB) % CACHELINE_FLOATS == 0);
                         //assert((YB_*sizeof(floats)) % CACHELINE_FLOATS == 0);
@@ -320,22 +450,23 @@ float simulator::getFilling(cint at_x, cint at_y, const vector<vectorized_matrix
                 // special case 1. Ideally vectorized. Access over top border
                 for (int y = 0; y < YE; ++y) {
                     cint Y = y*sim_ld;
-                    cint YB_ = (y-YB)*mask_ld - XB;
-                    #pragma omp simd aligned(sim_space, mask_space:64)
-                    #pragma vector aligned
+                    cint YB_ = (y - YB) * mask_ld - XB;
+#pragma omp simd aligned(sim_space, mask_space:64)
+#pragma vector aligned
                     for (int x = XB; x < XE; ++x)
                         f += sim_space[x + Y] * mask_space[x + YB_];
                 }
 
                 // optimized, wrapped access over the bottom border.
-                for (int y=rules.get_space_height()+YB; y<rules.get_space_height(); ++y) {
+                for (int y = rules.get_space_height() + YB; y < rules.get_space_height(); ++y)
+                {
                     cint Y = y*sim_ld;
                     cint mask_y_off = rules.get_space_height() + YB;
-                    cint YB_ = (y-mask_y_off)*mask_ld - XB;
+                    cint YB_ = (y - mask_y_off) * mask_ld - XB;
                     //assert(long(&sim_space[XB+Y]) % ALIGNMENT == 0);
                     //assert(long(&mask_space[XB+YB_]) % ALIGNMENT == 0);
-                    #pragma omp simd aligned(sim_space, mask_space:64)
-                    #pragma vector aligned
+#pragma omp simd aligned(sim_space, mask_space:64)
+#pragma vector aligned
                     for (int x = XB; x < XE; ++x)
                         f += sim_space[x + Y] * mask_space[x + YB_];
                 }
@@ -388,9 +519,12 @@ float simulator::getFilling(cint at_x, cint at_y, const vector<vectorized_matrix
                 for (int x = 0; x < (XE - rules.get_space_width()); ++x)
                     f += sim_space[x + Y] * mask_space[x + YB_];
             }
-        } else {
+        }
+        else
+        {
             // hard case. use wrapped version.
-            for (int y = YB; y < YE; ++y) {
+            for (int y = YB; y < YE; ++y)
+            {
                 cint Y = y;
                 cint YB_ = y - YB;
                 for (int x = XB; x < XE; ++x)
@@ -420,9 +554,12 @@ float simulator::getFilling(cint at_x, cint at_y, const vector<vectorized_matrix
                 f += sim_space[x + Y] * mask_space[x + YB_];
                 //f += space_current->getValue(x, y) * mask.getValue(x - XB_, y - YB);
         }
-    } else {
+    }
+    else
+    {
         // hard case. use wrapped version.
-        for (int y = YB; y < YE; ++y) {
+        for (int y = YB; y < YE; ++y)
+        {
             cint Y = y;
             cint YB_ = y - YB;
             for (int x = XB; x < XE; ++x)

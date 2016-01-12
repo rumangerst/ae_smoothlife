@@ -79,36 +79,28 @@ endif()
 message("GUI_TYPE is ${GUI_TYPE}")
 
 # Three executables:
-# smoothlife_sim: Simulator only, no graphics
-# smoothlife_sim.mic: Simulator only, no graphics, compiled for MIC (intel only)
-# smoothlife_ui: GUI only, obtains data from smoothlife and displays it
-# smoothlife_local: 1 thread for GUI and other threads for simulation
+# smoothlife_mpi_host: Communicates via MPI. Contains code for graphics
+# smoothlife_mpi_mic: Communicates via MPI. Only contains simulator code.
 # smoothlife_tests: tests
-add_executable(smoothlife_sim main.cpp ${SOURCES_SIM})
-add_executable(smoothlife_ui main.cpp ${SOURCES_SIM} ${SOURCES_GUI})
-add_executable(smoothlife_local main.cpp ${SOURCES_SIM} ${SOURCES_GUI})
+add_executable(smoothlife_mpi_host main.cpp ${SOURCES_SIM} ${SOURCES_GUI})
 add_executable(smoothlife_tests ${SOURCES_TESTS} ${SOURCES_SIM})
 
 if(BUILD_INTEL AND BUILD_MIC)
-  add_executable(smoothlife_sim.mic ${SOURCES_SIM})
+  add_executable(smoothlife_mpi_mic ${SOURCES_SIM})
 endif()
 
 # smoothlife_ui is determined by #ifdef GUI
 # smoothlife_local gets #ifdef GUI and #ifdef SIM
 # smoothlife_sim gets #ifdef SIM
-set_target_properties(smoothlife_sim PROPERTIES COMPILE_FLAGS "-DAPP_SIM=true -DAPP_GUI=false")
-target_link_libraries(smoothlife_sim ${Boost_LIBRARIES})
-set_target_properties(smoothlife_ui PROPERTIES COMPILE_FLAGS "-DAPP_GUI=true -DAPP_SIM=false -DGUI_TYPE=${GUI_TYPE}")
-target_link_libraries(smoothlife_ui ${SDL2_LIBRARY} ${OPENGL_gl_LIBRARY} ${OPENGL_glu_LIBRARY} ${GLEW_LIBRARIES})
-set_target_properties(smoothlife_local PROPERTIES COMPILE_FLAGS "-DAPP_GUI=true -DAPP_SIM=true -DGUI_TYPE=${GUI_TYPE}")
-target_link_libraries(smoothlife_local ${SDL2_LIBRARY} ${OPENGL_gl_LIBRARY} ${OPENGL_glu_LIBRARY} ${GLEW_LIBRARIES} ${Boost_LIBRARIES})
+set_target_properties(smoothlife_mpi_host PROPERTIES COMPILE_FLAGS "-DAPP_GUI=true -DAPP_SIM=true -DGUI_TYPE=${GUI_TYPE}")
+target_link_libraries(smoothlife_mpi_host ${SDL2_LIBRARY} ${OPENGL_gl_LIBRARY} ${OPENGL_glu_LIBRARY} ${GLEW_LIBRARIES} ${Boost_LIBRARIES})
 
 set_target_properties(smoothlife_tests PROPERTIES COMPILE_FLAGS "-DAPP_SIM=true -DAPP_GUI=false")
 target_link_libraries(smoothlife_tests ${Boost_LIBRARIES})
 
 if(BUILD_INTEL AND BUILD_MIC)
-  set_target_properties(smoothlife_sim.mic PROPERTIES COMPILE_FLAGS "-DAPP_SIM -mmic")
-  target_link_libraries(smoothlife_sim.mic ${Boost_LIBRARIES})
+  set_target_properties(smoothlife_mpi_mic PROPERTIES COMPILE_FLAGS "-DAPP_SIM=true -DAPP_GUI=false -mmic")
+  target_link_libraries(smoothlife_mpi_mic ${Boost_LIBRARIES})
 endif()
 
 #Adding test to cmake

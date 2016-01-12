@@ -11,16 +11,22 @@
 #include <random>
 #include <atomic>
 #include <chrono>
+#include <mutex>
+#include <queue>
+#include <memory>
 #include "matrix.h"
+#include "matrix_buffer_queue.h"
 #include "ruleset.h"
 #include "aligned_vector.h"
+#include "communication.h"
+
 
 using namespace std;
 
 #define SIMULATOR_MODE MODE_SIMULATE //Set the mode of the simulator
-#define WAIT_FOR_RENDERING true // if true, calcation threads will be waiting for the renderer to give a finishing signal
 #define SIMULATOR_INITIALIZATION_FUNCTION space_set_splat //The function used for initialization
 
+#define SPACE_QUEUE_MAX_SIZE 16 //the queue size used by the program
 
 /**
  * @brief Encapsulates the calculation of states
@@ -35,10 +41,12 @@ public:
     ~simulator();
 
     ruleset rules;
-    atomic<vectorized_matrix<float>*> space_of_renderer;
-    atomic<bool>* is_space_drawn_once_by_renderer; //TODO: is probably obsolete with MPI, but still still good for testing first!
-    atomic<bool> new_space_available;
-
+    
+    
+    matrix_buffer_queue<float> * space; // Stores all calculated spaces to be fetched by local GUI or sent by MPI. 
+    #define space_current space->buffer_read_ptr() //Redirect space_current to the read pointer provided by matrix_buffer
+    #define space_next space->buffer_write_ptr() //redirect space_next to the write pointer provided by matrix_buffer
+    
     ulong spacetime = 0;
 
     // we need 2 masks for each unaligned space cases (to re-align it)
@@ -50,7 +58,8 @@ public:
 
     bool initialized = false;
     bool running = false;
-    bool optimize = true; //use the optimized methods
+    bool optimize = true; //use the optimized methods    
+
 
     /**
      * @brief Initializes all necessary fields. Initializes field with default initialization function
@@ -72,6 +81,11 @@ public:
     void simulate_step();
     
     /**
+     * @brief Runs this simulation local without any MPI communication
+     */
+    void run_simulation_local();
+        
+    /**
      * @brief Runs the simulation including interface with GUI as master simulator
      */
     void run_simulation_master();
@@ -80,11 +94,17 @@ public:
      * @brief Runs the simulation including interface with master simulator as slave simulator
      */
     void run_simulation_slave();
+    
+    /**
+     * @brief Returns copy of the current space
+     * @return 
+     */
+    vectorized_matrix<float> get_current_space()
+    {
+        return vectorized_matrix<float>(*space_current);
+    }
 
 private:
-
-    vectorized_matrix<float>* space_current;
-    vectorized_matrix<float>* space_next;
     
     /**
      * @brief prepares all offset masks (CACHELINE_SIZE / sizeof(floats) many)
