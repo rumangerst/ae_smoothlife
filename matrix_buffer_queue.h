@@ -27,6 +27,12 @@ public:
             cerr << "Invalid matrix_buffer_queue size" << endl;
             exit(EXIT_FAILURE);
         }
+        
+        if (initial.getNumCols() <= 0 || initial.getNumRows() <= 0)
+        {
+            cerr << "Invalid initial matrix" <<endl;
+            exit(EXIT_FAILURE);
+        }
 
         // Reserve size queue buffer + 2 read/write buffer
         buffer.reserve(size + 2);

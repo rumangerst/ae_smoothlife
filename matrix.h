@@ -5,6 +5,7 @@
 #include <math.h>
 #include "aligned_vector.h"
 #include <assert.h>
+#include "mpi_manager.h"
 
 /*
  * DONE:
@@ -352,6 +353,7 @@ public:
         if (src.getNumCols() != getNumCols() || src.getNumRows() != getNumRows())
         {
             cerr << "Cannot overwrite matrix from matrix with different size!"<<endl;
+            cerr << "From rank" << mpi_rank() << endl;
             cerr << src.getNumCols() << "<>" << getNumCols() << " or " << src.getNumRows() << "<>" << getNumRows() << endl;
             exit(EXIT_FAILURE);
         }

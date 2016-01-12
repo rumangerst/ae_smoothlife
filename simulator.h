@@ -13,6 +13,7 @@
 #include <chrono>
 #include <mutex>
 #include <queue>
+#include <memory>
 #include "matrix.h"
 #include "matrix_buffer_queue.h"
 #include "ruleset.h"

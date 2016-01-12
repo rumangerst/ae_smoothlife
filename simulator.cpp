@@ -253,7 +253,7 @@ void simulator::run_simulation_local()
             }
             else
             {
-                cout << "Simulator | queue full!" << endl;
+//                cout << "Simulator | queue full!" << endl;
             }
         }
     }
@@ -321,7 +321,7 @@ void simulator::run_simulation_master()
 
 
         //Communication tag. Get the data from GUI and 
-        if (mpi_test(&mpi_status_communication))
+        if (running && mpi_test(&mpi_status_communication))
         {
             cout << "MPI | Recieved COMMUNICATION signal." << endl;
             running = mpi_app_communication & APP_COMMUNICATION_RUNNING == APP_COMMUNICATION_RUNNING;

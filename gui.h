@@ -74,6 +74,9 @@ public:
      */
     void run_mpi(ruleset rules)
     {
+        // predefine the space of the renderer
+        space = vectorized_matrix<float>(rules.get_space_width(), rules.get_space_height());
+    
         //Setup MPI
         MPI_Request mpi_status_communication = MPI_REQUEST_NULL;
         MPI_Request mpi_status_data_prepare = MPI_REQUEST_NULL;
@@ -82,10 +85,7 @@ public:
         int mpi_buffer_data_prepare = 0;
         int mpi_state_data = APP_MPI_STATE_DATA_IDLE;
         int mpi_app_communication = APP_COMMUNICATION_RUNNING;
-        matrix_buffer_queue<float> mpi_render_queue = matrix_buffer_queue<float>(SPACE_QUEUE_MAX_SIZE, space);
-
-        // predefine the space of the renderer
-        space = vectorized_matrix<float>(rules.get_space_width(), rules.get_space_height());
+        auto mpi_render_queue = unique_ptr<matrix_buffer_queue<float>>(new matrix_buffer_queue<float>(SPACE_QUEUE_MAX_SIZE, space));        
 
         //Initialize the GUI
         if (initialize())
@@ -97,7 +97,7 @@ public:
             while (running || mpi_state_data != APP_MPI_STATE_DATA_IDLE)
             {
                 //Update current space if needed
-                mpi_render_queue.pop(space);
+                mpi_render_queue->pop(space);
 
                 update(running);
                 render();
@@ -148,9 +148,9 @@ public:
                     int input_count = mpi_buffer_data_prepare / (rules.get_space_width() * rules.get_space_height());
 
                     //Empty the queue if needed
-                    for (int i = 0; i < input_count - mpi_render_queue.capacity_left(); ++i)
+                    for (int i = 0; i < input_count - mpi_render_queue->capacity_left() + 2; ++i)
                     {
-                        mpi_render_queue.pop();
+                        mpi_render_queue->pop();
                     }
 
                     // Move data into queue
@@ -160,6 +160,9 @@ public:
                         
                         vectorized_matrix<float> * dst = mpi_render_queue->buffer_write_ptr();
                         
+                        assert(dst->getNumCols() == rules.get_space_width() && dst->getNumRows() == rules.get_space_height());
+                        
+                        
                         //Write the data into write buffer
                         for(int y = 0; y < dst->getNumRows(); ++y)
                         {
@@ -168,12 +171,13 @@ public:
                                 dst->setValue(src[matrix_index(x,y,dst->getNumCols())],x,y);
                             }
                         }
-                        
-                        //Push read buffer into the queue
-                        if(!mpi_render_queue->push())
+                                                
+                        //Push read buffer into the queue                        
+                        while(!mpi_render_queue->push())
                         {
-                            cerr << "MPI render queue could not make space for new data!" << endl;
-                            exit(EXIT_FAILURE);
+                            mpi_render_queue->pop();
+                            //cerr << "MPI render queue could not make space for new data!" << endl;
+                            //exit(EXIT_FAILURE);
                         }
                     }
 
