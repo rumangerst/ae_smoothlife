@@ -24,6 +24,9 @@ using namespace std;
 
 /**
  * @brief Encapsulates the calculation of states
+ * concept: both
+ * core and field initiation routines: Ruman
+ * vectorization and OpenMP parallization: Bastian
  */
 class simulator
 {
@@ -57,12 +60,14 @@ public:
     /**
      * @brief Initialize all necessary fields
      * @param predefined_space A predefined space 
+     * @MakeOver Bastian
      */
     void initialize(vectorized_matrix<float> & predefined_space);
     
     /**
      * @brief Simulates 1 (or dt) steps
      * @note Public because we'll need this for our tests
+     * @MakeOver Bastian
      */
     void simulate_step();
     
@@ -81,6 +86,10 @@ private:
     vectorized_matrix<float>* space_current;
     vectorized_matrix<float>* space_next;
     
+    /**
+     * @brief prepares all offset masks (CACHELINE_SIZE / sizeof(floats) many)
+     * @author Bastian
+     */
     void initiate_masks();
 
     void space_set_1(vectorized_matrix<float>* space)
@@ -258,8 +267,9 @@ private:
      * @param mask a non-sparsed matrix with target set [0,1]
      * @param mask_sum the sum of all values in the given matrix (the maximal, obtainable value of this function)
      * @return a float with a value in [0,1]
+     * @author Bastian
      */
-    float getFilling(cint at_x, cint at_y, const vectorized_matrix<float> & mask, cfloat mask_sum);
+    float getFilling(cint at_x, cint at_y, const vector<vectorized_matrix<float>> &masks, cint offset, cfloat mask_sum);
 
     /**
      * @brief calculates the area around the point (x,y) based on the mask & normalizes it by mask_sum
@@ -269,6 +279,7 @@ private:
      * @param mask a non-sparsed matrix with target set [0,1]
      * @param mask_sum the sum of all values in the given matrix (the maximal, obtainable value of this function)
      * @return a float with a value in [0,1]
+     * @author Bastian
      */
     float getFilling_unoptimized(cint at_x, cint at_y, const vectorized_matrix<float> & mask, cfloat mask_sum);
 };

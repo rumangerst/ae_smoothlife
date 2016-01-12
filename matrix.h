@@ -55,6 +55,7 @@ inline int matrix_index(cint x, cint y, cint ld)
  * @param w width of the matrix, i.e. number of columns
  * @param h height of the matrix, i.e. number of rows
  * @return Wrapped matrix index
+ * @author Ruman
  */
 inline int matrix_index_wrapped(cint x, cint y, cint w, cint h, cint ld)
 {
@@ -64,19 +65,20 @@ inline int matrix_index_wrapped(cint x, cint y, cint w, cint h, cint ld)
 /**
  * @brief Calculates the ideal ld to 64 byte alignment
  * @param size
+ * @author Bastian
  * @return
  */
 inline int matrix_calc_ld_with_padding(cint typesize, cint size, cint cacheline_size)
 {
     return cacheline_size * ceil(float(size * typesize)/cacheline_size);
-    //return size + size % cacheline_floats;
 }
 
 template <typename T>
 /**
  * @brief A matrix with row first approach
  * - this is basically a data container to keep all important information 
- * together
+ * - concept: together
+ * - vectorization updates: Bastian
  */
 class vectorized_matrix
 {
@@ -128,6 +130,7 @@ public:
      * @param columns
      * @param rows
      * @param offset
+     * @author Bastian
      */
     vectorized_matrix(cint columns, cint rows, cint offset) {
         assert(rows > 0 && columns > 0 && offset >= 0 && offset <= CACHELINE_FLOATS);
@@ -200,6 +203,7 @@ public:
      * @param v the value the elements in the circle should be set to.
      * @param smooth_factor smooth the circle. Set it to 0 to disable smoothing. Will increase radius of the circle by this value
      * @param offset the number of units added to the left boundary before drawing the circle begins
+     * @author Ruman
      */
     void set_circle(cdouble center_x, cdouble center_y, cdouble r, const T v, cdouble smooth_factor, cint offset)
     {
@@ -255,7 +259,7 @@ public:
      * @brief sum Calculates the sum of values
      * @return
      */
-    float sum() {
+    float sum() const {
         float s = 0;
 
         for(int i = 0; i < columns; ++i) {
@@ -270,7 +274,7 @@ public:
         return s;
     }
     
-    void print_to_console() {
+    void print_to_console() const {
         cout << "matrix print:\n";
         for (int y=0; y < this->rows; ++y) {
             for (int x=0; x < this->ld; ++x)
@@ -280,7 +284,7 @@ public:
         cout.flush();
     }
     
-    void print_info() {
+    void print_info() const {
         cout << "rows: " << rows << "  cols: " << columns << "  ld: " << ld << endl;
         cout << "left: " << leftOffset << "  right: " << rightOffset << "  off: " << offset << endl;
         cout.flush();

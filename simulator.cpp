@@ -63,15 +63,16 @@ void simulator::initiate_masks() {
         - to allow vectorization, we add additional padding to the left side of the masks
         - this increases the effective leading dimension of the matrices
         - however, using the right offset, the space and the masks will always
-          be aligned to the cacheline_size 64
-        - at the cost of additional values to be calculated
+          be aligned to the cacheline_size (64)
+        - we may still accept peel loops. this will be determined during advanced
+          performance testing
      */
     for (int o=0; o<CACHELINE_FLOATS; ++o) {
         vectorized_matrix<float> outer_mask = vectorized_matrix<float>(rules.get_ra() * 2 + 2, rules.get_ra() * 2 + 2, o);
         outer_mask.set_circle(rules.get_ri(), 1, 1, o);
         outer_masks.push_back(outer_mask);
-        outer_masks[o].print_to_console();
-        cout << endl;
+        //outer_masks[o].print_to_console();
+        //cout << endl;
         
         // change that back later to get_ri()
         vectorized_matrix<float> inner_mask = vectorized_matrix<float>(rules.get_ra() * 2 + 2, rules.get_ra() * 2 + 2, o);
@@ -167,10 +168,11 @@ void simulator::simulate_step()
 
             float n;
             float m;
-            if (optimize && (x - offset_from_mask_center) >= 0 && 
-               (x + outer_masks[off].getRightOffset() < this->space_current->getNumCols())) {
-                n = getFilling(x, y, inner_masks[off], inner_mask_sum); // filling of inner circle
-                m = getFilling(x, y, outer_masks[off], outer_mask_sum); // filling of outer ring
+            //(x - offset_from_mask_center) >= 0
+            //(x + outer_masks[off].getRightOffset() < this->space_current->getNumCols()))
+            if (optimize) {
+                n = getFilling(x, y, inner_masks, off, inner_mask_sum); // filling of inner circle
+                m = getFilling(x, y, outer_masks, off, outer_mask_sum); // filling of outer ring
             } else {
                 n = getFilling_unoptimized(x, y, inner_masks[0], inner_mask_sum); // filling of inner circle
                 m = getFilling_unoptimized(x, y, outer_masks[0], outer_mask_sum); // filling of outer ring
@@ -246,12 +248,12 @@ void simulator::run_simulation_master()
     }
 }
 
-float simulator::getFilling(cint at_x, cint at_y, const vectorized_matrix<float> &mask, cfloat mask_sum)
+float simulator::getFilling(cint at_x, cint at_y, const vector<vectorized_matrix<float>> &masks, cint offset, cfloat mask_sum)
 {
-    // These define the rect inside the grid being accessed by mask
-    //cint XB = at_x - mask.getNumCols() / 2; // aka x_begin
-    //cint XE = at_x + mask.getNumCols() / 2; // aka x_end
+    assert(offset >= 0);
+    vectorized_matrix<float> const &mask = masks[offset];
 
+    // These define the rect inside the grid being accessed by mask
     cint XB = at_x - mask.getLeftOffset(); // aka x_begin
     cint XE = at_x + mask.getRightOffset(); // aka x_end
     cint YB = at_y - mask.getNumRows() / 2; // aka y_begin
@@ -343,18 +345,48 @@ float simulator::getFilling(cint at_x, cint at_y, const vectorized_matrix<float>
             for (int y = YB; y < YE; ++y) {
                 cint Y = y*sim_ld;
                 cint YB_ = (y-YB)*mask_ld - XB;
+                //assert(long(&sim_space[XB+Y]) % ALIGNMENT == 0);
+                //assert(long(&mask_space[XB+YB_]) % ALIGNMENT == 0);
+                #pragma omp simd aligned(sim_space, mask_space:64)
+                #pragma vector aligned
                 for (int x = XB; x < rules.get_space_width(); ++x)
                     f += sim_space[x + Y] * mask_space[x + YB_];
             }
 
-            // optimized, wrapped access over the right border. Effective offset: 0!
+            /*
+             still not working ___.___
+            //cout << "mxoff: " << mask_x_off << " term: " << mask_x_off + (XE - rules.get_space_width()) - 1 << " mcols: " << mask.getLd() << endl;
+            //cint off_new = (ALIGNMENT - (mask_x_off*sizeof(float) % ALIGNMENT))/sizeof(float); // that works definetely!
+            cint mask_x_off = rules.get_space_width() - XB +1; // should be +1
+            cint off_new = CACHELINE_FLOATS - (mask_x_off % CACHELINE_FLOATS);
+            //cout << "m_off: " << mask_x_off << " off: " << offset << "  off_new: " << off_new << endl;
+            vectorized_matrix<float> const &mask = masks[off_new];
+            cout << "XE: " << XE << endl;
+            cint XE = at_x + mask.getRightOffset();
+            cout << "XE: " << XE << endl;
+            assert(mask_x_off + (XE - rules.get_space_width()) - 1 <= mask.getLd());
+            assert(long(&mask.getValues()[mask_x_off+off_new]) % ALIGNMENT == 0);            
+
+            // optimized, wrapped access over the right border
             for (int y = YB; y < YE; ++y) {
                 cint Y = y*sim_ld;
-                cint mask_x_off = mask.getNumCols() - (XE - rules.get_space_width()); 
+                //cint YB_ = mask_x_off + (y - YB) * mask_ld;
+                for (int x = 0; x < (XE - rules.get_space_width()); ++x)
+                    f += space_current->getValue(x, y) * mask.getValue(x + mask_x_off + off_new, y - YB);
+                    //f += sim_space[x + Y] * mask_space[x + YB_];
+            }
+            
+            */
+            
+            cint mask_x_off = rules.get_space_width() - XB +1; // should be +1
+            // semi-optimized, wrapped access over the right border
+            for (int y = YB; y < YE; ++y) {
+                cint Y = y*sim_ld;
                 cint YB_ = mask_x_off + (y - YB) * mask_ld;
+                __assume_aligned (sim_space, 64);
+                __assume_aligned (mask_space,64);
                 for (int x = 0; x < (XE - rules.get_space_width()); ++x)
                     f += sim_space[x + Y] * mask_space[x + YB_];
-                    //f += space_current->getValue(x, y) * mask.getValue(x + mask_x_off, y - YB);
             }
         } else {
             // hard case. use wrapped version.
@@ -370,6 +402,8 @@ float simulator::getFilling(cint at_x, cint at_y, const vectorized_matrix<float>
         for (int y = YB; y < YE; ++y) {
             cint Y = y*sim_ld;
             cint YB_ = (y-YB)*mask_ld - XB;
+            __assume_aligned (sim_space, 64);
+            __assume_aligned (mask_space,64);
             for (int x = 0; x < XE; ++x)
                 f += sim_space[x + Y] * mask_space[x + YB_];
                 //f += space_current->getValue(x, y) * mask.getValue(x - XB, y - YB);
@@ -380,6 +414,8 @@ float simulator::getFilling(cint at_x, cint at_y, const vectorized_matrix<float>
             cint Y = y*sim_ld;
             cint XB_ = rules.get_space_width() + XB;
             cint YB_ = (y-YB) * mask_ld - XB_;
+            __assume_aligned (sim_space, 64);
+            __assume_aligned (mask_space,64);
             for (int x = rules.get_space_width() + XB; x < rules.get_space_width(); ++x)
                 f += sim_space[x + Y] * mask_space[x + YB_];
                 //f += space_current->getValue(x, y) * mask.getValue(x - XB_, y - YB);
