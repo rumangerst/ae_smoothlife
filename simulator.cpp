@@ -281,7 +281,7 @@ void simulator::run_simulation_master()
     int mpi_state_data = APP_MPI_STATE_DATA_IDLE;
     int mpi_app_communication = APP_COMMUNICATION_RUNNING;
 
-    while (running || mpi_state_data != APP_MPI_STATE_DATA_IDLE)
+    while (running)
     {
         // Calculate the next state if simulation is enabled
         // Separate the actual simulation from interfacing            
@@ -324,7 +324,7 @@ void simulator::run_simulation_master()
         if (running && mpi_test(&mpi_status_communication))
         {
             cout << "MPI | Recieved COMMUNICATION signal." << endl;
-            running = mpi_app_communication & APP_COMMUNICATION_RUNNING == APP_COMMUNICATION_RUNNING;
+            running = (mpi_app_communication & APP_COMMUNICATION_RUNNING) == APP_COMMUNICATION_RUNNING;
 
             // If the GUI has sent the final message (running=false), do not recieve any other message
             if (running)
@@ -387,8 +387,13 @@ void simulator::run_simulation_master()
             cout << "> SIM finished" << endl;
 
             mpi_state_data = APP_MPI_STATE_DATA_IDLE;
-        }
+        }        
     }
+    
+    //Cancel all MPI requests that are still active
+    mpi_cancel_if_needed(&mpi_status_communication);
+    mpi_cancel_if_needed(&mpi_status_data_prepare);
+    mpi_cancel_if_needed(&mpi_status_data_data);
 }
 
 float simulator::getFilling(cint at_x, cint at_y, const vectorized_matrix<float> &mask, cfloat mask_sum)

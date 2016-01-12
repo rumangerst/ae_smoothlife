@@ -22,7 +22,7 @@ SCENARIO("Test correct behaviour of matrix_buffer_queue", "[matrix][queue]")
 
     GIVEN("a 100x100 matrix buffer queue with 10 queue size and initial matrix consisting only of 0")
     {
-        matrix_buffer_queue<float> queue = matrix_buffer_queue<float>(10, vectorized_matrix<float>(100, 100));
+        matrix_buffer_queue<float> queue(10, vectorized_matrix<float>(100, 100));
 
         WHEN("Checking the queue size")
         {

@@ -82,10 +82,15 @@ public:
         MPI_Request mpi_status_data_prepare = MPI_REQUEST_NULL;
         MPI_Request mpi_status_data_data = MPI_REQUEST_NULL;
         aligned_vector<float> mpi_buffer_data_data = aligned_vector<float>(rules.get_space_width() * rules.get_space_height() * SPACE_QUEUE_MAX_SIZE);
+        int mpi_buffer_data_data_copy_status = 0;
         int mpi_buffer_data_prepare = 0;
         int mpi_state_data = APP_MPI_STATE_DATA_IDLE;
         int mpi_app_communication = APP_COMMUNICATION_RUNNING;
-        auto mpi_render_queue = unique_ptr<matrix_buffer_queue<float>>(new matrix_buffer_queue<float>(SPACE_QUEUE_MAX_SIZE, space));        
+        unique_ptr<matrix_buffer_queue<float>> mpi_render_queue = unique_ptr<matrix_buffer_queue<float>>(new matrix_buffer_queue<float>(SPACE_QUEUE_MAX_SIZE, space));      
+        
+        //Slow down renderer if queue is not full
+        const int renderer_queue_slowdown_strength = 16;
+        int renderer_queue_slowdown_counter = 0;
 
         //Initialize the GUI
         if (initialize())
@@ -94,10 +99,16 @@ public:
 
             bool running = true;
 
-            while (running || mpi_state_data != APP_MPI_STATE_DATA_IDLE)
+            while (running)
             {
-                //Update current space if needed
-                mpi_render_queue->pop(space);
+                // Slow down rendering of field if not enough items are in queue.
+                if(renderer_queue_slowdown_counter++ >= renderer_queue_slowdown_strength * ( (mpi_render_queue->max_size() - mpi_render_queue->size()) / (float)mpi_render_queue->max_size() ))
+                {                
+                    //Update current space if needed
+                    mpi_render_queue->pop(space);
+                    
+                    renderer_queue_slowdown_counter = 0;
+                }
 
                 update(running);
                 render();
@@ -143,7 +154,45 @@ public:
                 }
                 else if (mpi_state_data == APP_MPI_STATE_DATA_DATA && mpi_test(&mpi_status_data_data))
                 {
-                    cout << "< GUI got data." << endl;
+                    //Count of items in current MPI buffer
+                    int input_count = mpi_buffer_data_prepare / (rules.get_space_width() * rules.get_space_height());
+                    
+                    //As long as there is something to copy to queue
+                    while(mpi_buffer_data_data_copy_status != input_count)
+                    {
+                        //Try to push the read buffer into queue. If this fails, wait.
+                        if(!mpi_render_queue->push())
+                        {
+                            break;
+                        }
+                        
+                        int i = mpi_buffer_data_data_copy_status; //The current item to copy
+                        
+                        float * src = &mpi_buffer_data_data.data()[i * rules.get_space_width() * rules.get_space_height()];                         
+                        vectorized_matrix<float> * dst = mpi_render_queue->buffer_write_ptr();
+                        
+                        assert(dst->getNumCols() == rules.get_space_width() && dst->getNumRows() == rules.get_space_height());                        
+                        
+                        //Write the data into write buffer
+                        for(int y = 0; y < dst->getNumRows(); ++y)
+                        {
+                            for(int x = 0; x < dst->getNumCols(); ++x)
+                            {
+                                dst->setValue(src[matrix_index(x,y,dst->getNumCols())],x,y);
+                            }
+                        }
+                        
+                        ++mpi_buffer_data_data_copy_status;
+                    }
+                    
+                    //Only recieve new message if everything was copied.
+                    if(mpi_buffer_data_data_copy_status == input_count)
+                    {
+                        mpi_buffer_data_data_copy_status = 0;
+                        mpi_state_data = APP_MPI_STATE_DATA_IDLE;
+                    }
+                    
+                    /*cout << "< GUI got data." << endl;
 
                     int input_count = mpi_buffer_data_prepare / (rules.get_space_width() * rules.get_space_height());
 
@@ -152,6 +201,8 @@ public:
                     {
                         mpi_render_queue->pop();
                     }
+                    
+                    cout << "Will put "<<input_count << " - queue_size = " << mpi_render_queue->size() << endl;
 
                     // Move data into queue
                     for(int i = 0; i < input_count; ++i)
@@ -181,12 +232,8 @@ public:
                         }
                     }
 
-                    mpi_state_data = APP_MPI_STATE_DATA_IDLE;
-                }
-                
-                if (mpi_state_data != APP_MPI_STATE_DATA_IDLE && !running)
-                    cout << "GUI | Waiting for MPI operation to complete ..." << endl;
-
+                    mpi_state_data = APP_MPI_STATE_DATA_IDLE;*/
+                } 
             }
         }
         else
@@ -207,6 +254,10 @@ public:
 
         //Send the shutdown synchronous + blocking to prevent too early destruction of class
         MPI_Ssend(&mpi_app_communication, 1, MPI_INT, mpi_get_rank_with_role(mpi_role::SIMULATOR_MASTER), APP_MPI_TAG_COMMUNICATION, MPI_COMM_WORLD);
+        
+        //Cancel all other requests
+        mpi_cancel_if_needed(&mpi_status_data_prepare);
+        mpi_cancel_if_needed(&mpi_status_data_data);
 
         cout << "MPI GUI quit." << endl;
     }

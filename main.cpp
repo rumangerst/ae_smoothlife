@@ -120,6 +120,11 @@ int main(int argc, char ** argv)
 #endif
             case mpi_role::SIMULATOR_MASTER:
                 return run_simulator(argc, argv);
+                
+            default:
+                
+                cerr << "Invalid role!" << endl;
+                return EXIT_FAILURE;
             }
         }
     }

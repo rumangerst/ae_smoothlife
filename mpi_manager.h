@@ -44,6 +44,16 @@ inline bool mpi_test(MPI_Request * request)
 }
 
 /**
+ * @brief Cancel MPI_Request if mpi_test returns false
+ * @param request
+ */
+inline void mpi_cancel_if_needed(MPI_Request * request)
+{
+    if(!mpi_test(request))
+        MPI_Cancel(request);
+}
+
+/**
  * @brief Returns the MPI comm rank of this MPI instance
  * @author Ruman
  * @return
