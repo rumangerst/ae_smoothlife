@@ -160,7 +160,7 @@ void simulator::initialize()
 
 void simulator::simulate_step()
 {
-#pragma omp parallel for schedule(static)
+    #pragma omp parallel for schedule(static)
     for (int x = 0; x < rules.get_space_width(); ++x)
     {
         for (int y = 0; y < rules.get_space_height(); ++y)
@@ -415,28 +415,23 @@ float simulator::getFilling(cint at_x, cint at_y, const vector<vectorized_matrix
                     // ideal case. no wrapping
                     for (int y = YB; y < YE; ++y)
                     {
-                        cint Y = y*sim_ld;
-                        cint YB_ = (y - YB) * mask_ld - XB;
-                        // only activate these if you really want to check again...
-                        //assert((Y+XB) % CACHELINE_FLOATS == 0);
-                        //assert((YB_*sizeof(floats)) % CACHELINE_FLOATS == 0);
-                        //assert(long(&sim_space[XB+Y]) % ALIGNMENT == 0);
-                        //assert(long(&mask_space[XB+YB_]) % ALIGNMENT == 0);
-                        #pragma omp simd aligned(sim_space, mask_space:64)
-                        #pragma vector aligned
-                        for (int x = XB; x < XE; ++x)
-                            f += sim_space[x + Y] * mask_space[x + YB_];
+                        //assert(long(&sim_space[y*sim_ld + XB]) % ALIGNMENT == 0);
+                        //assert(long(&mask_space[(y - YB) * mask_ld]) % ALIGNMENT == 0);
+                        cfloat const * s_row = sim_space + y*sim_ld + XB;         // space row + x_start
+                        cfloat const * m_row = mask_space + (y - YB) * mask_ld;   // mask row
+                        #pragma omp simd aligned(s_row, m_row:64) reduction(+:f)
+                        for (int x = 0; x < XE-XB; ++x)
+                            f += s_row[x] * m_row[x];
                     }
                 } else {
 
                     // special case 2. Ideally vectorized. Access over bottom border
                     for (int y = YB; y < rules.get_space_height(); ++y) {
-                        cint Y = y*sim_ld;
-                        cint YB_ = (y-YB)*mask_ld - XB;
-                        #pragma omp simd aligned(sim_space, mask_space:64)
-                        #pragma vector aligned
-                        for(int x=XB; x<XE; ++x)
-                            f += sim_space[x + Y] * mask_space[x + YB_];
+                        cfloat const * s_row = sim_space + y*sim_ld + XB;         // space row + x_start
+                        cfloat const * m_row = mask_space + (y - YB) * mask_ld;   // mask row
+                        #pragma omp simd aligned(s_row, m_row:64) reduction(+:f)
+                        for (int x = 0; x < XE-XB; ++x)
+                            f += s_row[x] * m_row[x];
                     }
 
                     // optimized, wrapped access over the top border.
@@ -446,7 +441,7 @@ float simulator::getFilling(cint at_x, cint at_y, const vector<vectorized_matrix
                         cint YB_ = (mask_y_off + y)*mask_ld - XB;
                         //assert(long(&sim_space[XB+Y]) % ALIGNMENT == 0);
                         //assert(long(&mask_space[XB+YB_]) % ALIGNMENT == 0);
-                        #pragma omp simd aligned(sim_space, mask_space:64)
+                        #pragma omp simd aligned(sim_space, mask_space:64) reduction(+:f)
                         #pragma vector aligned
                         for (int x = XB; x < XE; ++x)
                             f += sim_space[x + Y] * mask_space[x + YB_];
@@ -457,7 +452,7 @@ float simulator::getFilling(cint at_x, cint at_y, const vector<vectorized_matrix
                 for (int y = 0; y < YE; ++y) {
                     cint Y = y*sim_ld;
                     cint YB_ = (y - YB) * mask_ld - XB;
-                    #pragma omp simd aligned(sim_space, mask_space:64)
+                    #pragma omp simd aligned(sim_space, mask_space:64) reduction(+:f)
                     #pragma vector aligned
                     for (int x = XB; x < XE; ++x)
                         f += sim_space[x + Y] * mask_space[x + YB_];
@@ -471,7 +466,7 @@ float simulator::getFilling(cint at_x, cint at_y, const vector<vectorized_matrix
                     cint YB_ = (y - mask_y_off) * mask_ld - XB;
                     //assert(long(&sim_space[XB+Y]) % ALIGNMENT == 0);
                     //assert(long(&mask_space[XB+YB_]) % ALIGNMENT == 0);
-                    #pragma omp simd aligned(sim_space, mask_space:64)
+                    #pragma omp simd aligned(sim_space, mask_space:64) reduction(+:f)
                     #pragma vector aligned
                     for (int x = XB; x < XE; ++x)
                         f += sim_space[x + Y] * mask_space[x + YB_];
@@ -484,25 +479,33 @@ float simulator::getFilling(cint at_x, cint at_y, const vector<vectorized_matrix
                 cint YB_ = (y-YB)*mask_ld - XB;
                 //assert(long(&sim_space[XB+Y]) % ALIGNMENT == 0);
                 //assert(long(&mask_space[XB+YB_]) % ALIGNMENT == 0);
-                #pragma omp simd aligned(sim_space, mask_space:64)
+                #pragma omp simd aligned(sim_space, mask_space:64) reduction(+:f)
                 #pragma vector aligned
                 for (int x = XB; x < rules.get_space_width(); ++x)
                     f += sim_space[x + Y] * mask_space[x + YB_];
             }
 
             /*
-             still not working ___.___
-            //cout << "mxoff: " << mask_x_off << " term: " << mask_x_off + (XE - rules.get_space_width()) - 1 << " mcols: " << mask.getLd() << endl;
-            //cint off_new = (ALIGNMENT - (mask_x_off*sizeof(float) % ALIGNMENT))/sizeof(float); // that works definetely!
-            cint mask_x_off = rules.get_space_width() - XB +1; // should be +1
-            cint off_new = CACHELINE_FLOATS - (mask_x_off % CACHELINE_FLOATS);
+            //still not working ( '-') -> ( ._. )
+            //cint mask_x_off = rules.get_space_width() - XB +1; // should be +1
+            cint mask_x_off = mask.getLd() - (XE - rules.get_space_width()) - 1 - offset; // mask_x based on current mask, but without left offset
+            cint off_new = CACHELINE_FLOATS - (mask_x_off % CACHELINE_FLOATS);            // calc new offset to start from index 0
+            if !(off_new >= 0 && off_new < CACHELINE_FLOATS)
+            assert(off_new >= 0 && off_new < CACHELINE_FLOATS);
+            assert(off_new == (ALIGNMENT - (mask_x_off*sizeof(float) % ALIGNMENT))/sizeof(float));  // garantue correct math
             //cout << "m_off: " << mask_x_off << " off: " << offset << "  off_new: " << off_new << endl;
-            vectorized_matrix<float> const &mask = masks[off_new];
-            cout << "XE: " << XE << endl;
-            cint XE = at_x + mask.getRightOffset();
-            cout << "XE: " << XE << endl;
-            assert(mask_x_off + (XE - rules.get_space_width()) - 1 <= mask.getLd());
-            assert(long(&mask.getValues()[mask_x_off+off_new]) % ALIGNMENT == 0);            
+            vectorized_matrix<float> const &mask = masks[off_new];  // overwrite old mask temporarily
+            cint XE = mask.getRightOffset();                 // calculate new end (can be different!)
+            //cout << "off: " << offset << " off_new: " << off_new << " diff: " << off_new - offset << endl;       
+            //cout << "mxoff: " << mask_x_off << " term: " << mask_x_off + off_new + XE << " ld: " << mask.getLd() << endl;
+            //cout << "XE: " << XE << endl;
+            //mask.print_info();
+            if(XE > mask.getLd()) {
+                mask.print_info();
+                mask.print_to_console();
+            }
+            assert(XE <= mask.getLd());
+            assert(long(&mask.getValues()[mask_x_off+off_new]) % ALIGNMENT == 0);  
 
             // optimized, wrapped access over the right border
             for (int y = YB; y < YE; ++y) {
@@ -512,10 +515,9 @@ float simulator::getFilling(cint at_x, cint at_y, const vector<vectorized_matrix
                     f += space_current->getValue(x, y) * mask.getValue(x + mask_x_off + off_new, y - YB);
                     //f += sim_space[x + Y] * mask_space[x + YB_];
             }
-            
             */
             
-            cint mask_x_off = rules.get_space_width() - XB +1; // should be +1
+            cint mask_x_off = mask.getLd() - (XE - rules.get_space_width()) - 1;
             // semi-optimized, wrapped access over the right border
             for (int y = YB; y < YE; ++y) {
                 cint Y = y*sim_ld;
