@@ -29,7 +29,7 @@ void setup_openmp()
 /**
  * @brief Runs this simulation and GUI without MPI.
  */
-int run_local(int argc, char ** argv)
+int run_master(int argc, char ** argv)
 {
     ruleset rules = ruleset_from_cli(argc, argv);
     simulator s(rules);
@@ -42,69 +42,43 @@ int run_local(int argc, char ** argv)
 #pragma omp section
         {
             cout << "GUI is in thread " << omp_get_thread_num() << endl;
-            g.run_local(&s);
+            g.run(&s);
         }
 
 #pragma omp section
         {
             cout << "Simulator is in thread " << omp_get_thread_num() << endl;
-            s.run_simulation_local();
+            s.run_simulation_master();
         }
     }
 
     return EXIT_SUCCESS;
 }
 
+#endif
+
 /**
- * @brief Run as GUI only. Communicate over mpi
+ * @brief Run as slave simulator. Communicate over mpi
  */
-int run_gui(int argc, char ** argv)
+int run_slave(int argc, char ** argv)
 {
     ruleset rules = ruleset_from_cli(argc, argv);
-    GUI_TYPE g;
-
-    g.run_mpi(rules);
+    simulator s(rules);
+    s.initialize();
+    s.run_simulation_slave();
 
     return EXIT_SUCCESS;
 }
 
-
-#endif
-
 /**
- * @brief Run as simulator only. Communicate over mpi
+ * @brief Run master simulator without GUI. Communicate over mpi
  */
-int run_simulator(int argc, char ** argv)
+int run_master_perftest(int argc, char ** argv)
 {
-    if (mpi_get_role() == mpi_role::SIMULATOR_SLAVE)
-    {
-        cerr << "SIMULATOR_SLAVE not implemented!" << endl;
-        return EXIT_FAILURE;
-    }
-
     ruleset rules = ruleset_from_cli(argc, argv);
     simulator s(rules);
     s.initialize();
     s.run_simulation_master();
-
-    return EXIT_SUCCESS;
-}
-
-/**
- * @brief Run as simulator only. Communicate over mpi
- */
-int run_simulator_perftest(int argc, char ** argv)
-{
-    if (mpi_get_role() == mpi_role::SIMULATOR_SLAVE)
-    {
-        cerr << "SIMULATOR_SLAVE not implemented!" << endl;
-        return EXIT_FAILURE;
-    }
-
-    ruleset rules = ruleset_from_cli(argc, argv);
-    simulator s(rules);
-    s.initialize();
-    s.run_simulation_master_perftest();
 
     return EXIT_SUCCESS;
 }
@@ -116,45 +90,27 @@ int main(int argc, char ** argv)
     try
     {
         mpi_manager mpi(argc, argv);
-        
-#if APP_PERFTEST
 
-        return run_simulator_perftest(argc, argv);
-
-#else
-        if (mpi_comm_size() == 1)
+        if (mpi_get_role() == mpi_role::SIMULATOR_MASTER)
         {
+            if (APP_PERFTEST)
+            {
+                return run_master_perftest(argc, argv);
+            }
+            else
+            {
 #if APP_GUI
-            return run_local(argc, argv);
+                return run_master(argc, argv);
 #else
-            cerr << "This application is compiled to be simulator only! Terminating." << endl;
-            return EXIT_FAILURE;
+                cerr << "Cannot run this program as master! No GUI!" << endl;
 #endif
+            }
         }
         else
         {
-            switch (mpi_get_role())
-            {
-            case mpi_role::USER_INTERFACE:
-#if APP_GUI
-                return run_gui(argc, argv);
-#else
-                cerr << "This application is compiled to be simulator only! Terminating." << endl;
-                return EXIT_FAILURE;
-#endif
-            case mpi_role::SIMULATOR_MASTER:
-                return run_simulator(argc, argv);
-                
-            case mpi_role::SIMULATOR_SLAVE:
-                return run_simulator(argc, argv);
-                
-            default:
-                
-                cerr << "Invalid role!" << endl;
-                return EXIT_FAILURE;
-            }
+            return run_slave(argc, argv);
         }
-#endif
+
     }
     catch (exception & ex)
     {

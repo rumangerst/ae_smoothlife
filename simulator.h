@@ -26,7 +26,7 @@ using namespace std;
 #define SIMULATOR_MODE MODE_SIMULATE //Set the mode of the simulator
 #define SIMULATOR_INITIALIZATION_FUNCTION space_set_splat //The function used for initialization
 
-#define SPACE_QUEUE_MAX_SIZE 16 //the queue size used by the program
+#define SPACE_QUEUE_MAX_SIZE 32 //the queue size used by the program
 #define USE_PEELED false
 
 /**
@@ -79,27 +79,19 @@ public:
      * @note Public because we'll need this for our tests
      * @MakeOver Bastian
      */
-    void simulate_step();
-    
-    /**
-     * @brief Runs this simulation local without any MPI communication
-     */
-    void run_simulation_local();
+    void simulate_step(); 
+
         
     /**
-     * @brief Runs the simulation including interface with GUI as master simulator
+     * @brief Runs the simulation as master simulator
      */
     void run_simulation_master();
     
     /**
-     * @brief Runs the simulation including interface with master simulator as slave simulator
+     * @brief Runs the simulation as slave simulator
      */
     void run_simulation_slave();
-    
-    /**
-    * @brief Runs the simulator including interface with slave simulators as master simulator. No communication with GUI. Only for performance testing.
-    */
-    void run_simulation_master_perftest();
+
     
     /**
      * @brief Returns copy of the current space

@@ -10,21 +10,16 @@ enum mpi_role
      * @brief This MPI instance has no role
      */
     NONE = 0,
-
+    
     /**
-     * @brief This MPI instance gets obtains the data from the MASTER simulator
+     * @brief This MPI instance is a simulator, collects all calculated data from the SLAVE simulators. Is also the GUI.
      */
-    USER_INTERFACE = 1,
-
-    /**
-     * @brief This MPI instance is a simulator, collects all calculated data from the SLAVE simulators
-     */
-    SIMULATOR_MASTER = 2,
+    SIMULATOR_MASTER = 1,
 
     /**
      * @brief This MPI instance is a simulator, sends data to the MASTER simulator
      */
-    SIMULATOR_SLAVE = 3
+    SIMULATOR_SLAVE = 2
 
 };
 
@@ -84,19 +79,10 @@ inline int mpi_comm_size()
  */
 inline mpi_role mpi_get_role_of(int mpi_comm_rank)
 {
-#if APP_PERFTEST
-    if (mpi_comm_rank == 0)
+    if (mpi_comm_rank == 0)        
         return mpi_role::SIMULATOR_MASTER;
     else
         return mpi_role::SIMULATOR_SLAVE;
-#else
-    if (mpi_comm_rank == 0)
-        return mpi_role::USER_INTERFACE;
-    else if (mpi_comm_rank == 1)
-        return mpi_role::SIMULATOR_MASTER;
-    else
-        return mpi_role::SIMULATOR_SLAVE;
-#endif
 }
 
 inline mpi_role mpi_get_role()
@@ -104,26 +90,21 @@ inline mpi_role mpi_get_role()
     return mpi_get_role_of(mpi_rank());
 }
 
-/**
- * @brief Returns the comm rank with given role
- * @param role
- * @return the comm rank >= 0, -1 if there are more than 1 theoretically possible ranks
- */
-inline int mpi_get_rank_with_role(mpi_role role)
+inline vector<int> mpi_get_ranks_with_role(mpi_role role)
 {
-#if APP_PERFTEST
-    if (role == mpi_role::SIMULATOR_MASTER)
-        return 0;    
+    if(role == mpi_role::SIMULATOR_MASTER)
+        return vector<int> { 0 };
     else
-        return -1;
-#else
-    if (role == mpi_role::USER_INTERFACE)
-        return 0;
-    else if (role == mpi_role::SIMULATOR_MASTER)
-        return 1;
-    else
-        return -1;
-#endif
+    {
+        vector<int> d;
+        
+        for(int i = 1; i < mpi_comm_size(); ++i)
+        {
+            d.push_back(i);
+        }
+        
+        return d;
+    }
 }
 
 /**
@@ -132,18 +113,11 @@ inline int mpi_get_rank_with_role(mpi_role role)
  */
 inline void mpi_check_role()
 {
-    if (mpi_role() == mpi_role::USER_INTERFACE)
+    if (mpi_role() == mpi_role::SIMULATOR_MASTER)
     {
         if (!APP_GUI)
         {
             throw std::runtime_error("rank is known as GUI, but executable is not compiled as GUI!");
-        }
-    }
-    else
-    {
-        if (!APP_SIM)
-        {
-            throw std::runtime_error("rank is known as simulator, but executable is not compiled as simulator!");
         }
     }
 }
