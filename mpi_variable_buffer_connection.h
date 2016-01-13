@@ -18,7 +18,7 @@ public:
         IDLE = 0, //The connection is idle. Sender awaits for data to be set, reciever has no open connections and data can be read
         PREPARE = 1, //The buffer size is sent. Sender waits until data is sent. Reciever waits for sending finished.
         DATA = 2, //The actual data is sent. Sender waits until data is sent. Reciever waits until this is finished.
-    }
+    };
     
     mpi_variable_buffer_connection(int _sender, int _reciever, int _tag, int _buffer_size, MPI_Datatype _datatype) : 
         rank_sender(_sender),
@@ -218,4 +218,4 @@ private:
         
         return current_state;
     }    
-}
+};

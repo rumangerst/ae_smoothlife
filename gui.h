@@ -1,6 +1,8 @@
 #pragma once
 #include "simulator.h"
 #include "communication.h"
+#include "mpi_connection.h"
+#include "mpi_variable_buffer_connection.h"
 
 /**
  * @brief General GUI class with MPI support
@@ -86,7 +88,9 @@ public:
         int mpi_buffer_data_prepare = 0;
         int mpi_state_data = APP_MPI_STATE_DATA_IDLE;
         int mpi_app_communication = APP_COMMUNICATION_RUNNING;
-        unique_ptr<matrix_buffer_queue<float>> mpi_render_queue = unique_ptr<matrix_buffer_queue<float>>(new matrix_buffer_queue<float>(SPACE_QUEUE_MAX_SIZE, space));      
+        unique_ptr<matrix_buffer_queue<float>> mpi_render_queue = unique_ptr<matrix_buffer_queue<float>>(new matrix_buffer_queue<float>(SPACE_QUEUE_MAX_SIZE, space));  
+        
+        
         
         //Slow down renderer if queue is not full
         const int renderer_queue_slowdown_strength = 16;

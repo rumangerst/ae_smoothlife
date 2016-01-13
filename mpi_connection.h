@@ -17,15 +17,14 @@ public:
     {
         IDLE = 0, //The connection is idle. Sender awaits for data to be set, reciever has no open connections and data can be read
         DATA = 1  //The buffer is sent. Sender waits until data is sent. Reciever waits for sending finished.
-    }
+    };
     
-    mpi_variable_buffer_connection(int _sender, int _reciever, int _tag, int _buffer_size, MPI_Datatype _datatype) : 
+    mpi_connection(int _sender, int _reciever, int _tag, int _buffer_size, MPI_Datatype _datatype) : 
         rank_sender(_sender),
         rank_reciever(_reciever),
         mpi_tag(_tag),
         datatype(_datatype),
         buffer_data(aligned_vector<T>(_buffer_size)),
-        buffer_prepare(0),
         current_state(states::IDLE)
     
     {
@@ -158,4 +157,4 @@ private:
         
         return current_state;
     }    
-}
+};
