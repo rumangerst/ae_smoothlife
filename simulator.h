@@ -75,15 +75,21 @@ public:
     void initialize(vectorized_matrix<float> & predefined_space);
     
     /**
-     * @brief Simulates 1 (or dt) steps
+     * @brief Simulates 1 (or dt) steps. Simulate for whole field
      * @note Public because we'll need this for our tests
      * @MakeOver Bastian
      */
-    void simulate_step(); 
-
-        
+    void simulate_step();
+    
     /**
-     * @brief Runs the simulation as master simulator
+     * @brief Simulates 1 (or dt) steps. Simulate only field from x_start to x_start + w. Needed for slave simulators.
+     * @note Public because we'll need this for our tests
+     * @MakeOver Bastian
+     */
+    void simulate_step(int x_start, int w);       
+    
+    /**
+     * @brief Runs simulation as master simulator. Distributes work over MPI, but also does some work itself.
      */
     void run_simulation_master();
     
@@ -103,6 +109,23 @@ public:
     }
 
 private:
+    
+    /**
+     * @brief Returns how much width of the field calculation a rank gets. Exits program if division cannot be done.
+     * @return 
+     */
+    int get_space_mpi_chunk_width()
+    {
+        int ranks = mpi_comm_size();
+        
+        if(rules.get_space_width() % ranks != 0)
+        {
+            cerr << "Cannot divide space into same parts! Terminating." << endl;
+            exit(EXIT_FAILURE);
+        }
+        
+        return rules.get_space_width() / ranks;
+    }
     
     /**
      * @brief prepares all offset masks (CACHELINE_SIZE / sizeof(floats) many)

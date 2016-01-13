@@ -161,8 +161,13 @@ void simulator::initialize()
 
 void simulator::simulate_step()
 {
+    simulate_step(0, rules.get_space_width());
+}
+
+void simulator::simulate_step(int x_start, int w)
+{
 #pragma omp parallel for schedule(static)
-    for (int x = 0; x < rules.get_space_width(); ++x)
+    for (int x = x_start; x < x_start + w; ++x)
     {
         for (int y = 0; y < rules.get_space_height(); ++y)
         {
@@ -234,7 +239,7 @@ void simulator::run_simulation_slave()
 
 void simulator::run_simulation_master()
 {
-    cout << "Simulator | Running MPI Master simulator ..." << endl;
+    cout << "Simulator | Running Master MPI simulator ..." << endl;
     running = true;
 
 #ifdef ENABLE_PERF_MEASUREMENT
@@ -262,44 +267,24 @@ void simulator::run_simulation_master()
 
         if (SIMULATOR_MODE == MODE_SIMULATE)
         {
-            if (!APP_PERFTEST)
+            /**
+             * Simulate only the first time or when the buffer_queue can enqueue the current read buffer.
+             * If we only test performance never push into queue and always simulate.
+             */
+            if (APP_PERFTEST || spacetime == 0 || space->push())
             {
                 /**
-                 * Simulate only the first time or when the buffer_queue can enqueue the current read buffer.
+                 * The master simulator is special in comparison to the slaves. As the master holds the complete field, it can 
+                 * access all data without copying/synching.
+                 * We want the master to have a workload, too; so we give it the first data chunk (the width of the field divided by count of ranks)
+                 * 
+                 * If we only have one rank, the master will calculate all of them
                  */
-                if (spacetime == 0 || space->push())
-                {
-                    simulate_step();
+                simulate_step(0, get_space_mpi_chunk_width());
 
-                    if (ENABLE_PERF_MEASUREMENT)
-                    {
-                        // NOTE: this should be done either directly after swapping or here
-                        // HACK: here is best - doesn't interrupt code-flow to much :)
-                        if (spacetime % 100 == 0)
-                        {
-                            auto perf_time_end = chrono::high_resolution_clock::now();
-                            double perf_time_seconds = chrono::duration<double>(perf_time_end - perf_time_start).count();
-
-                            cout << "Simulator | " << (spacetime - perf_spacetime_start) / perf_time_seconds << " calculations / s" << endl;
-
-                            perf_spacetime_start = spacetime;
-                            perf_time_start = chrono::high_resolution_clock::now();
-                        }
-                    }
-                }
-                else
-                {
-                    //cout << "Simulation || queue full!" << endl;
-                }
-            }
-            else
-            {
-                simulate_step();
-
+                //Measure performance
                 if (ENABLE_PERF_MEASUREMENT)
                 {
-                    // NOTE: this should be done either directly after swapping or here
-                    // HACK: here is best - doesn't interrupt code-flow to much :)
                     if (spacetime % 100 == 0)
                     {
                         auto perf_time_end = chrono::high_resolution_clock::now();
@@ -314,7 +299,7 @@ void simulator::run_simulation_master()
             }
         }
     }
-
+    
     //Send the shutdown signal to the slaves
     for (mpi_connection<int> & connection : communication_connections)
     {

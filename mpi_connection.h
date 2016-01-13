@@ -43,13 +43,7 @@ public:
         {
             cerr << "Cannot initialize mpi_connection with empty buffer!" << endl;
             exit(EXIT_FAILURE);
-        }
-        
-        cout << "Initial:" << endl;
-        for(T v : initial)
-        {
-            cout << v << endl;
-        }
+        }        
     }   
     
     mpi_connection(int _sender, int _reciever, int _tag, int _buffer_size, MPI_Datatype _datatype) : 

@@ -1,6 +1,7 @@
 #pragma once
 #include <mpi.h>
 #include <iostream>
+#include <vector>
 
 using namespace std;
 
@@ -105,6 +106,11 @@ inline vector<int> mpi_get_ranks_with_role(mpi_role role)
         
         return d;
     }
+}
+
+inline int mpi_get_slave_count()
+{
+    return mpi_comm_size() - 1;
 }
 
 /**
