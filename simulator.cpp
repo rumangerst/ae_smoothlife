@@ -1,5 +1,6 @@
 #include "simulator.h"
 #include "aligned_vector.h"
+#include "mpi_connection.h"
 #include <assert.h>
 #include <mpi.h>
 #include <omp.h>
@@ -205,8 +206,30 @@ void simulator::simulate_step()
 
 void simulator::run_simulation_slave()
 {
-    cerr << "Not implemented yet" << endl;
-    exit(EXIT_FAILURE);
+    cout << "Simulator | Slave simulator on rank " << mpi_rank() << endl;
+
+    // Connection from master to slave (communication)
+    mpi_connection<int> communication_connection = mpi_connection<int>(
+            0,
+            mpi_rank(),
+            APP_MPI_TAG_COMMUNICATION,
+            MPI_INT,
+            aligned_vector<int>{APP_COMMUNICATION_RUNNING});
+
+    running = true;
+
+    while (running)
+    {
+        if (communication_connection.update() == mpi_connection<int>::states::IDLE)
+        {
+            int tag = (*communication_connection.get_buffer())[0];
+            running = (tag & APP_COMMUNICATION_RUNNING) == APP_COMMUNICATION_RUNNING;
+
+            communication_connection.flush();
+        }
+    }
+
+    cout << "Simulator | Slave shut down." << endl;
 }
 
 void simulator::run_simulation_master()
@@ -218,6 +241,19 @@ void simulator::run_simulation_master()
     auto perf_time_start = chrono::high_resolution_clock::now();
     ulong perf_spacetime_start = 0;
 #endif    
+
+    vector<mpi_connection<int>> communication_connections;
+
+    for (int i = 1; i < mpi_comm_size(); ++i)
+    {
+        // Connection from master to slave (communication)
+        communication_connections.push_back(mpi_connection<int>(
+                                            0,
+                                            i,
+                                            APP_MPI_TAG_COMMUNICATION,
+                                            MPI_INT,
+                                            aligned_vector<int>{APP_COMMUNICATION_RUNNING}));
+    }
 
     while (running)
     {
@@ -277,6 +313,34 @@ void simulator::run_simulation_master()
                 }
             }
         }
+    }
+
+    //Send the shutdown signal to the slaves
+    for (mpi_connection<int> & connection : communication_connections)
+    {
+        cout << "MPI Master | Shutting down slave rank ..." << connection.get_rank_reciever() << endl;
+
+        //Wait until finished
+        while (connection.update() != mpi_connection<int>::states::IDLE)
+        {
+
+        }
+
+        //Remove "running" tag
+        int tag = (*connection.get_buffer())[0];
+        tag = tag & ~APP_MPI_TAG_COMMUNICATION;
+        (*connection.get_buffer())[0] = tag;
+
+        //Send the data
+        connection.flush();
+
+        //Wait until finished
+        while (connection.update() != mpi_connection<int>::states::IDLE)
+        {
+
+        }
+
+        cout << "MPI Master | Slave rank " << connection.get_rank_reciever() << " shut down." << endl;
     }
 }
 

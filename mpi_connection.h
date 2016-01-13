@@ -19,23 +19,44 @@ public:
         DATA = 1  //The buffer is sent. Sender waits until data is sent. Reciever waits for sending finished.
     };
     
-    mpi_connection(int _sender, int _reciever, int _tag, int _buffer_size, MPI_Datatype _datatype) : 
+    mpi_connection(int _sender, int _reciever, int _tag, MPI_Datatype _datatype, aligned_vector<T> initial) : 
         rank_sender(_sender),
         rank_reciever(_reciever),
         mpi_tag(_tag),
         datatype(_datatype),
-        buffer_data(aligned_vector<T>(_buffer_size)),
-        current_state(states::IDLE)
+        buffer_data(initial),
+        current_state(states::IDLE),
+        sender(mpi_rank() == _sender)
     
     {
         if(_sender < 0 || _reciever < 0 || _sender >= mpi_comm_size() || _reciever >= mpi_comm_size())
         {
-            cerr << "Cannot initialize mpi_variable_buffer_connection with invalid sender and reciever" << endl;
-            exit(EXIT_FAILURE)
+            cerr << "Cannot initialize mpi_connection with invalid sender and reciever" << endl;
+            exit(EXIT_FAILURE);
         }
-    
-        sender = (mpi_rank() == _sender);
+        if(_sender != mpi_rank() && _reciever != mpi_rank())
+        {
+            cerr << "Cannot initialize mpi_connection without sender or reciever being current rank!" << endl;
+            exit(EXIT_FAILURE);
+        }
+        if(initial.size() == 0)
+        {
+            cerr << "Cannot initialize mpi_connection with empty buffer!" << endl;
+            exit(EXIT_FAILURE);
+        }
+        
+        cout << "Initial:" << endl;
+        for(T v : initial)
+        {
+            cout << v << endl;
+        }
     }   
+    
+    mpi_connection(int _sender, int _reciever, int _tag, int _buffer_size, MPI_Datatype _datatype) : 
+    mpi_connection(_sender,_reciever,_tag,aligned_vector<T>(_buffer_size),_datatype)
+    
+    {
+    }          
     
     /**
     * @brief Returns the buffer if state is IDLE if sender and state is IDLE
@@ -116,6 +137,16 @@ public:
     {
         //Cancel all open connections
         mpi_cancel_if_needed(&request_data);
+    }
+    
+    int get_rank_sender()
+    {
+        return rank_sender;
+    }
+    
+    int get_rank_reciever()
+    {
+        return rank_reciever;
     }
     
 private:

@@ -2,6 +2,7 @@
 
 #include <vector>
 #include "communication.h"
+#include "aligned_vector.h"
 
 using namespace std;
 
@@ -20,31 +21,46 @@ public:
         DATA = 2, //The actual data is sent. Sender waits until data is sent. Reciever waits until this is finished.
     };
     
-    mpi_variable_buffer_connection(int _sender, int _reciever, int _tag, int _buffer_size, MPI_Datatype _datatype) : 
+    mpi_variable_buffer_connection(int _sender, int _reciever, int _tag, MPI_Datatype _datatype, aligned_vector<T> initial) : 
         rank_sender(_sender),
         rank_reciever(_reciever),
         mpi_tag(_tag),
         datatype(_datatype),
-        buffer_data(aligned_vector<T>(_buffer_size)),
+        buffer_data(initial),
         buffer_prepare(0),
-        current_state(states::IDLE)
+        current_state(states::IDLE),
+        sender(mpi_rank() == _sender)
     
     {
         if(_sender < 0 || _reciever < 0 || _sender >= mpi_comm_size() || _reciever >= mpi_comm_size())
         {
             cerr << "Cannot initialize mpi_variable_buffer_connection with invalid sender and reciever" << endl;
-            exit(EXIT_FAILURE)
+            exit(EXIT_FAILURE);
         }
-    
-        sender = (mpi_rank() == _sender);
+        if(_sender != mpi_rank() && _reciever != mpi_rank())
+        {
+            cerr << "Cannot initialize mpi_variable_buffer_connection without sender or reciever being current rank!" << endl;
+            exit(EXIT_FAILURE);
+        }
+        if(initial.size() == 0)
+        {
+            cerr << "Cannot initialize mpi_variable_buffer_connection with empty buffer!" << endl;
+            exit(EXIT_FAILURE);
+        }
     }   
     
+    mpi_variable_buffer_connection(int _sender, int _reciever, int _tag, int _buffer_size, MPI_Datatype _datatype) : 
+    mpi_variable_buffer_connection(_sender,_reciever,_tag,aligned_vector<T>(_buffer_size),_datatype)
+    
+    {
+    }   
+        
     /**
     * @brief Returns the buffer if state is IDLE if sender and state is IDLE
     */
     aligned_vector<T> * get_buffer()
     {       
-        if(current_state != state::IDLE)
+        if(current_state != states::IDLE)
         {
             cerr << "mpi_variable_buffer_connection: Buffer can only be returned in IDLE state!" << endl;
             exit(EXIT_FAILURE);
@@ -58,7 +74,7 @@ public:
     */
     int get_data_size()
     {
-        if(current_state != state::IDLE)
+        if(current_state != states::IDLE)
         {
             cerr << "mpi_variable_buffer_connection: Data size can only be returned in IDLE state!" << endl;
             exit(EXIT_FAILURE);
@@ -72,7 +88,7 @@ public:
     */
     void set_data_size(int size)
     {
-        if(!sender || current_state != state::IDLE)
+        if(!sender || current_state != states::IDLE)
         {
             cerr << "mpi_variable_buffer_connection: Cannot set send size!" << endl;
             exit(EXIT_FAILURE);
@@ -147,6 +163,16 @@ public:
         mpi_cancel_if_needed(&request_data);
     }
     
+    int get_rank_sender()
+    {
+        return rank_sender;
+    }
+    
+    int get_rank_reciever()
+    {
+        return rank_reciever;
+    }
+    
 private:
 
     const int rank_sender;
@@ -193,7 +219,7 @@ private:
     
     states update_reciever()
     {
-        if (current_state == states::PREPARE && mpi_test(&request_prepare)
+        if (current_state == states::PREPARE && mpi_test(&request_prepare))
         {
             //Got buffer size
             int recieve_size = buffer_prepare;
