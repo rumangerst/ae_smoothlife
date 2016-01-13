@@ -82,8 +82,10 @@ public:
         {
             return false;
         }
+        
+        buffer[queue_start].raw_copy_to(dst);
 
-        int w = buffer[0].getNumCols();
+        /*int w = buffer[0].getNumCols();
         int h = buffer[0].getNumRows();
 
         for (int y = 0; y < h; ++y)
@@ -92,7 +94,7 @@ public:
             {
                 dst[x + y * w] = buffer[queue_start].getValue(x, y);
             }
-        }
+        }*/
 
         //shrink the queue by 1
         queue_start = wrap_index(queue_start + 1);

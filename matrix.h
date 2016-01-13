@@ -368,6 +368,38 @@ public:
         }
 
     }
+    
+    /**
+     * @brief Writes the raw data (without padding) into ptr. ptr must have size of at least rows * columns. Writes data in row major.
+     * @param data
+     * @author Ruman
+     */
+    void raw_copy_to(T * ptr)
+    {
+        for(int y = 0; y < getNumRows();++y)
+        {
+            for(int x = 0; x < getNumCols();++x)
+            {
+                ptr[matrix_index(x,y,getNumCols())] = getValue(x,y);
+            }
+        }
+    }
+    
+    /**
+     * @brief Writes raw data from ptr into this matrix. ptr has no padding (ld = columns).
+     * @param ptr
+     * @author Ruman
+     */
+    void raw_overwrite(T * ptr)
+    {
+        for(int y = 0; y < getNumRows();++y)
+        {
+            for(int x = 0; x < getNumCols();++x)
+            {
+                setValue(ptr[matrix_index(x,y,getNumCols())],x,y);
+            }
+        }
+    }
 };
 
 template <typename T>

@@ -214,14 +214,62 @@ void simulator::run_simulation_slave()
     cout << "Simulator | Slave simulator on rank " << mpi_rank() << endl;
 
     // Connection from master to slave (communication)
+
     mpi_connection<int> communication_connection = mpi_connection<int>(
             0,
             mpi_rank(),
             APP_MPI_TAG_COMMUNICATION,
             MPI_INT,
-            aligned_vector<int>{APP_COMMUNICATION_RUNNING});
+            aligned_vector<int>
+    {
+        APP_COMMUNICATION_RUNNING
+    });
+
+    //Connection from slave to master (data)
+    mpi_connection<float> space_connection = mpi_connection<float>(
+            mpi_rank(),
+            0,
+            APP_MPI_TAG_SPACE,
+            rules.get_space_height() * get_mpi_chunk_border_width(),
+            MPI_FLOAT);
+
+    // The slave has connections to the left and right rank
+    int left_rank = matrix_index_wrapped(mpi_rank() - 1, 1, mpi_comm_size(), 1, mpi_comm_size());
+    int right_rank = matrix_index_wrapped(mpi_rank() + 1, 1, mpi_comm_size(), 1, mpi_comm_size());
+
+    mpi_connection<float> border_left_connection_recieve = mpi_connection<float>(
+            left_rank,
+            mpi_rank(),
+            APP_MPI_TAG_BORDER_LEFT,
+            rules.get_space_height() * get_mpi_chunk_border_width(),
+            MPI_FLOAT);
+    mpi_connection<float> border_left_connection_send = mpi_connection<float>(
+            mpi_rank(),
+            left_rank,
+            APP_MPI_TAG_BORDER_LEFT,
+            rules.get_space_height() * get_mpi_chunk_border_width(),
+            MPI_FLOAT);
+    mpi_connection<float> border_right_connection_recieve = mpi_connection<float>(
+            right_rank,
+            mpi_rank(),
+            APP_MPI_TAG_BORDER_RIGHT,
+            rules.get_space_height() * get_mpi_chunk_border_width(),
+            MPI_FLOAT);
+    mpi_connection<float> border_right_connection_send = mpi_connection<float>(
+            mpi_rank(),
+            right_rank,
+            APP_MPI_TAG_BORDER_RIGHT,
+            rules.get_space_height() * get_mpi_chunk_border_width(),
+            MPI_FLOAT);
+
+    // Use broadcast to obtain the initial space from master
+    vector<float> buffer_space = vector<float>(rules.get_space_width() * rules.get_space_height());
+    MPI_Bcast(buffer_space.data(), rules.get_space_width() * rules.get_space_height(), MPI_FLOAT, 0, MPI_COMM_WORLD);
+    space->buffer_read_ptr()->raw_overwrite(buffer_space.data());
+
 
     running = true;
+    communication_connection.flush();
 
     while (running)
     {
@@ -231,6 +279,36 @@ void simulator::run_simulation_slave()
             running = (tag & APP_COMMUNICATION_RUNNING) == APP_COMMUNICATION_RUNNING;
 
             communication_connection.flush();
+        }
+
+        cerr << "TODO" << endl;
+        exit(-1);
+        //TODO: Recieve borders and integrate them into the current field
+
+        if (space_connection.update() == mpi_connection<float>::states::IDLE)
+        {
+            /**
+             * The slave simulator only has to simulate one chunk. So we call simulate_step with this size.
+             * The simulator obtains its left and right borders from the neighbors via MPI. The data is stored in the border area left and right
+             * to the chunk area. This border area has a size % CACHELINE_SIZE
+             */
+            simulate_step(get_mpi_chunk_border_width(), get_mpi_chunk_width());
+            space->push();
+
+            //Write the data into the connection buffer and start sending of the data        
+            space->pop(space_connection.get_buffer()->data());
+            space_connection.flush();
+
+            //Send the borders if it's not the master simulator
+            if (left_rank != 0)
+            {
+                cerr << "TODO" << endl;
+            }
+            if (right_rank != 0)
+            {
+                cerr << "TODO" << endl;
+            }
+
         }
     }
 
@@ -260,6 +338,17 @@ void simulator::run_simulation_master()
                                             aligned_vector<int>{APP_COMMUNICATION_RUNNING}));
     }
 
+    // The master has connections to the left and right rank to synchronize borders
+    int left_rank = matrix_index_wrapped(mpi_rank() - 1, 1, mpi_comm_size(), 1, mpi_comm_size());
+    int right_rank = matrix_index_wrapped(mpi_rank() + 1, 1, mpi_comm_size(), 1, mpi_comm_size());
+
+    //Send the initial field to all slaves   
+    vector<float> buffer_space = vector<float>(rules.get_space_width() * rules.get_space_height());
+    space->buffer_read_ptr()->raw_copy_to(buffer_space.data());
+    MPI_Bcast(buffer_space.data(), rules.get_space_width() * rules.get_space_height(), MPI_FLOAT, 0, MPI_COMM_WORLD);
+    
+    //TODO: left/right border sync
+
     while (running)
     {
         // Calculate the next state if simulation is enabled
@@ -280,7 +369,14 @@ void simulator::run_simulation_master()
                  * 
                  * If we only have one rank, the master will calculate all of them
                  */
-                simulate_step(0, get_space_mpi_chunk_width());
+                simulate_step(0, get_mpi_chunk_width());
+
+                //We need to ensure a realistic situation, so we push the data to the queue and then directly remove it
+                if (APP_PERFTEST)
+                {
+                    space->push();
+                    space->pop();
+                }
 
                 //Measure performance
                 if (ENABLE_PERF_MEASUREMENT)
@@ -299,7 +395,7 @@ void simulator::run_simulation_master()
             }
         }
     }
-    
+
     //Send the shutdown signal to the slaves
     for (mpi_connection<int> & connection : communication_connections)
     {

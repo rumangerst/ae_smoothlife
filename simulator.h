@@ -111,10 +111,19 @@ public:
 private:
     
     /**
+     * @brief Returns the size of the border of a slave simulator chunk
+     * @return 
+     */
+    int get_mpi_chunk_border_width()
+    {
+        return matrix_calc_ld_with_padding(sizeof(float), rules.get_ra() + 1, CACHELINE_SIZE);
+    }
+    
+    /**
      * @brief Returns how much width of the field calculation a rank gets. Exits program if division cannot be done.
      * @return 
      */
-    int get_space_mpi_chunk_width()
+    int get_mpi_chunk_width()
     {
         int ranks = mpi_comm_size();
         

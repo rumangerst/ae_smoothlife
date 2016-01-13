@@ -47,7 +47,7 @@ public:
     }   
     
     mpi_connection(int _sender, int _reciever, int _tag, int _buffer_size, MPI_Datatype _datatype) : 
-    mpi_connection(_sender,_reciever,_tag,aligned_vector<T>(_buffer_size),_datatype)
+    mpi_connection(_sender,_reciever,_tag,_datatype,aligned_vector<T>(_buffer_size))
     
     {
     }          
