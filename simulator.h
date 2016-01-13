@@ -97,6 +97,11 @@ public:
     void run_simulation_slave();
     
     /**
+    * @brief Runs the simulator including interface with slave simulators as master simulator. No communication with GUI. Only for performance testing.
+    */
+    void run_simulation_master_perftest();
+    
+    /**
      * @brief Returns copy of the current space
      * @return 
      */
