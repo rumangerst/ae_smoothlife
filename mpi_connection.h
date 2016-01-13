@@ -7,17 +7,16 @@ using namespace std;
 
 template <typename T>
 /**
-* @brief Contains a MPI connection between sender and reciever which sends a variable buffer from sender to reciever.
+* @brief Contains a MPI connection between sender and reciever.
 */
-class mpi_variable_buffer_connection
+class mpi_connection
 {
 public:
 
     enum states
     {
         IDLE = 0, //The connection is idle. Sender awaits for data to be set, reciever has no open connections and data can be read
-        PREPARE = 1, //The buffer size is sent. Sender waits until data is sent. Reciever waits for sending finished.
-        DATA = 2, //The actual data is sent. Sender waits until data is sent. Reciever waits until this is finished.
+        DATA = 1  //The buffer is sent. Sender waits until data is sent. Reciever waits for sending finished.
     }
     
     mpi_variable_buffer_connection(int _sender, int _reciever, int _tag, int _buffer_size, MPI_Datatype _datatype) : 
@@ -54,39 +53,6 @@ public:
     }
     
     /**
-    * @brief Returns the data size contained in buffer if state is IDLE
-    */
-    int get_data_size()
-    {
-        if(current_state != state::IDLE)
-        {
-            cerr << "mpi_variable_buffer_connection: Data size can only be returned in IDLE state!" << endl;
-            exit(EXIT_FAILURE);
-        }
-        
-        return buffer_prepare;
-    }
-    
-    /**
-    * @brief Sets the size of send data. Can only be called by sender and if state is IDLE.
-    */
-    void set_data_size(int size)
-    {
-        if(!sender || current_state != state::IDLE)
-        {
-            cerr << "mpi_variable_buffer_connection: Cannot set send size!" << endl;
-            exit(EXIT_FAILURE);
-        }
-        if(size <= 0)
-        {
-            cerr << "mpi_variable_buffer_connection: Send size should be at least 1!" << endl;
-            exit(EXIT_FAILURE);
-        }
-        
-        buffer_prepare = size;
-    }
-    
-    /**
     * @brief Sends the data to reciever if sender; Accept new connection if reciever
     */
     void flush()
@@ -99,15 +65,18 @@ public:
                 exit(EXIT_FAILURE);
             }
             
-            MPI_Isend(&buffer_prepare,
-                      1,
-                      MPI_INT,
+            //Send the data now
+            int send_size = buffer_prepare;
+            
+            MPI_Isend(buffer_data.data(),
+                      send_size,
+                      MPI_FLOAT,
                       rank_reciever,
                       mpi_tag,
                       MPI_COMM_WORLD,
-                      &request_prepare);
-            
-            current_state = states::PREPARE;
+                      &request_data);
+                      
+            current_state = states::DATA;
         }
         else
         {
@@ -117,15 +86,19 @@ public:
                 exit(EXIT_FAILURE);
             }
             
-            MPI_Irecv(&buffer_prepare,
-                      1,
-                      MPI_INT,
+            //Got buffer size
+            int recieve_size = buffer_data.size();
+            
+            //Request the data
+            MPI_Irecv(buffer_data.data(),
+                      recieve_size,
+                      MPI_FLOAT,
                       rank_sender,
                       mpi_tag,
                       MPI_COMM_WORLD,
-                      &request_prepare);
+                      &request_data);
             
-            current_state = states::PREPARE;            
+            current_state = states::DATA;
         }
     }
     
@@ -158,30 +131,13 @@ private:
     
     states current_state; // Current state of this connection
     
-    int buffer_prepare; //Send data size buffer
     aligned_vector<T> buffer_data; //Data buffer
     
-    MPI_Request request_prepare = MPI_REQUEST_NULL;
     MPI_Request request_data = MPI_REQUEST_NULL;
     
     states update_sender()
     {
-        if (current_state == states::PREPARE && mpi_test(&request_prepare))
-        {
-            //Send the data now
-            int send_size = buffer_prepare;
-            
-            MPI_Isend(buffer_data.data(),
-                      send_size,
-                      datatype,
-                      rank_reciever,
-                      mpi_tag,
-                      MPI_COMM_WORLD,
-                      &request_data);
-                      
-            current_state = states::DATA;
-        }
-        else if (current_state == states::DATA && mpi_test(&request_data))
+        if (current_state == states::DATA && mpi_test(&request_data))
         {
             //Data sent. Go to idle.
             
@@ -193,23 +149,7 @@ private:
     
     states update_reciever()
     {
-        if (current_state == states::PREPARE && mpi_test(&request_prepare)
-        {
-            //Got buffer size
-            int recieve_size = buffer_prepare;
-            
-            //Request the data
-            MPI_Irecv(buffer_data.data(),
-                      recieve_size,
-                      datatype,
-                      rank_sender,
-                      mpi_tag,
-                      MPI_COMM_WORLD,
-                      &request_data);
-            
-            current_state = states::DATA;
-        }
-        else if (current_state == states::DATA && mpi_test(&request_data))
+        if (current_state == states::DATA && mpi_test(&request_data))
         {
             //Got the data. Go to idle
             
