@@ -246,6 +246,35 @@ void simulator::run_simulation_local()
 
 }
 
+void simulator::run_simulation_master_perftest()
+{
+    cout << "Simulator | Running perftest master simulator ..." << endl;
+    running = true;
+
+    auto perf_time_start = chrono::high_resolution_clock::now();
+    ulong perf_spacetime_start = 0;
+
+    while (running)
+    {
+        simulate_step();
+       
+        // NOTE: this should be done either directly after swapping or here
+        // HACK: here is best - doesn't interrupt code-flow to much :)
+        if (spacetime % 100 == 0)
+        {
+            auto perf_time_end = chrono::high_resolution_clock::now();
+            double perf_time_seconds = chrono::duration<double>(perf_time_end - perf_time_start).count();
+
+            cout << "Simulator | " << (spacetime - perf_spacetime_start) / perf_time_seconds << " calculations / s" << endl;
+
+            perf_spacetime_start = spacetime;
+            perf_time_start = chrono::high_resolution_clock::now();
+        }
+    }
+
+    cout << "Simulator | Perftest master simulator shut down." << endl;
+}
+
 void simulator::run_simulation_master()
 {
     cout << "Simulator | Running MPI Master simulator ..." << endl;

@@ -84,12 +84,19 @@ inline int mpi_comm_size()
  */
 inline mpi_role mpi_get_role_of(int mpi_comm_rank)
 {
+#if APP_PERFTEST
+    if (mpi_comm_rank == 0)
+        return mpi_role::SIMULATOR_MASTER;
+    else
+        return mpi_role::SIMULATOR_SLAVE;
+#else
     if (mpi_comm_rank == 0)
         return mpi_role::USER_INTERFACE;
     else if (mpi_comm_rank == 1)
         return mpi_role::SIMULATOR_MASTER;
     else
         return mpi_role::SIMULATOR_SLAVE;
+#endif
 }
 
 inline mpi_role mpi_get_role()
@@ -104,12 +111,19 @@ inline mpi_role mpi_get_role()
  */
 inline int mpi_get_rank_with_role(mpi_role role)
 {
+#if APP_PERFTEST
+    if (role == mpi_role::SIMULATOR_MASTER)
+        return 0;    
+    else
+        return -1;
+#else
     if (role == mpi_role::USER_INTERFACE)
         return 0;
     else if (role == mpi_role::SIMULATOR_MASTER)
         return 1;
     else
         return -1;
+#endif
 }
 
 /**

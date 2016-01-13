@@ -90,6 +90,25 @@ int run_simulator(int argc, char ** argv)
     return EXIT_SUCCESS;
 }
 
+/**
+ * @brief Run as simulator only. Communicate over mpi
+ */
+int run_simulator_perftest(int argc, char ** argv)
+{
+    if (mpi_get_role() == mpi_role::SIMULATOR_SLAVE)
+    {
+        cerr << "SIMULATOR_SLAVE not implemented!" << endl;
+        return EXIT_FAILURE;
+    }
+
+    ruleset rules = ruleset_from_cli(argc, argv);
+    simulator s(rules);
+    s.initialize();
+    s.run_simulation_master_perftest();
+
+    return EXIT_SUCCESS;
+}
+
 int main(int argc, char ** argv)
 {
     setup_openmp();
@@ -98,6 +117,11 @@ int main(int argc, char ** argv)
     {
         mpi_manager mpi(argc, argv);
         
+#if APP_PERFTEST
+
+        return run_simulator_perftest(argc, argv);
+
+#else
         if (mpi_comm_size() == 1)
         {
 #if APP_GUI
@@ -121,12 +145,16 @@ int main(int argc, char ** argv)
             case mpi_role::SIMULATOR_MASTER:
                 return run_simulator(argc, argv);
                 
+            case mpi_role::SIMULATOR_SLAVE:
+                return run_simulator(argc, argv);
+                
             default:
                 
                 cerr << "Invalid role!" << endl;
                 return EXIT_FAILURE;
             }
         }
+#endif
     }
     catch (exception & ex)
     {

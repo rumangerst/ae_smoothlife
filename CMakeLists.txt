@@ -4,7 +4,7 @@ project(ae_smoothlife)
 # enable unit testing
 enable_testing()
 
-OPTION(BUILD_INTEL "Build with intel compiler" OFF)
+OPTION(BUILD_INTEL "Build with intel compiler" ON)
 OPTION(BUILD_MIC "Also build MIC version" OFF)
 OPTION(GCC_VERBOSE_VECTOR "Show complete GCC vector report" OFF)
 OPTION(GUI_SDL "Use SDL GUI instead of OpenGL" ON)
@@ -83,6 +83,7 @@ message("GUI_TYPE is ${GUI_TYPE}")
 # smoothlife_mpi_mic: Communicates via MPI. Only contains simulator code.
 # smoothlife_tests: tests
 add_executable(smoothlife_mpi_host main.cpp ${SOURCES_SIM} ${SOURCES_GUI})
+add_executable(smoothlife_mpi_perftest main.cpp ${SOURCES_SIM})
 add_executable(smoothlife_tests ${SOURCES_TESTS} ${SOURCES_SIM})
 
 if(BUILD_INTEL AND BUILD_MIC)
@@ -95,11 +96,14 @@ endif()
 set_target_properties(smoothlife_mpi_host PROPERTIES COMPILE_FLAGS "-DAPP_GUI=true -DAPP_SIM=true -DGUI_TYPE=${GUI_TYPE}")
 target_link_libraries(smoothlife_mpi_host ${SDL2_LIBRARY} ${OPENGL_gl_LIBRARY} ${OPENGL_glu_LIBRARY} ${GLEW_LIBRARIES} ${Boost_LIBRARIES})
 
-set_target_properties(smoothlife_tests PROPERTIES COMPILE_FLAGS "-DAPP_SIM=true -DAPP_GUI=false")
+set_target_properties(smoothlife_mpi_perftest PROPERTIES COMPILE_FLAGS "-DAPP_GUI=false -DAPP_SIM=true -DAPP_PERFTEST=true")
+target_link_libraries(smoothlife_mpi_perftest ${Boost_LIBRARIES})
+
+set_target_properties(smoothlife_tests PROPERTIES COMPILE_FLAGS "-DAPP_SIM=true -DAPP_GUI=false -DAPP_PERFTEST=false")
 target_link_libraries(smoothlife_tests ${Boost_LIBRARIES})
 
 if(BUILD_INTEL AND BUILD_MIC)
-  set_target_properties(smoothlife_mpi_mic PROPERTIES COMPILE_FLAGS "-DAPP_SIM=true -DAPP_GUI=false -mmic")
+  set_target_properties(smoothlife_mpi_mic PROPERTIES COMPILE_FLAGS "-DAPP_SIM=true -DAPP_GUI=false  -DAPP_PERFTEST=false -mmic")
   target_link_libraries(smoothlife_mpi_mic ${Boost_LIBRARIES})
 endif()
 
