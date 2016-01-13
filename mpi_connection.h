@@ -42,7 +42,7 @@ public:
     */
     aligned_vector<T> * get_buffer()
     {       
-        if(current_state != state::IDLE)
+        if(current_state != states::IDLE)
         {
             cerr << "mpi_variable_buffer_connection: Buffer can only be returned in IDLE state!" << endl;
             exit(EXIT_FAILURE);
@@ -65,7 +65,7 @@ public:
             }
             
             //Send the data now
-            int send_size = buffer_prepare;
+            int send_size = buffer_data.size();
             
             MPI_Isend(buffer_data.data(),
                       send_size,
@@ -115,7 +115,6 @@ public:
     void cancel()
     {
         //Cancel all open connections
-        mpi_cancel_if_needed(&request_prepare);
         mpi_cancel_if_needed(&request_data);
     }
     
