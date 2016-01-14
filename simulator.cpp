@@ -422,63 +422,64 @@ void simulator::run_simulation_master()
                 {
                     int chunk_index = get_mpi_chunk_index(conn.get_rank_sender());
                     space_current->raw_overwrite(conn.get_buffer()->data(), chunk_index * get_mpi_chunk_width(), get_mpi_chunk_width());
-                    
+
                     //Ask for new data
                     conn.flush();
                 }
             }
-        }
 
-        /**
-         * The master simulator is special in comparison to the slaves. As the master holds the complete field, it can 
-         * access all data without copying/synching.
-         * We want the master to have a workload, too; so we give it the first data chunk (the width of the field divided by count of ranks)
-         * 
-         * If we only have one rank, the master will calculate all of them
-         */
-        simulate_step(get_mpi_chunk_index(), get_mpi_chunk_width());
 
-        //Send the borders to the ranks that need them
-        //Use space_next!!! We want to send the result of the calculation!
-        if (left_rank != 0)
-        {
-            /*
-             * We want the left border. It starts at chunk_index * chunk_width
-             */
-            int chunk_index = get_mpi_chunk_index();
-            int border_start = chunk_index * get_mpi_chunk_border_width();
-            space_next->raw_copy_to(border_left_connection_send.get_buffer()->data(), border_start, get_mpi_chunk_border_width());
-            border_left_connection_send.flush();
-        }
-        if (right_rank != 0)
-        {
             /**
-             * We want the right border. It starts at (chunk_index + 1) * chunk_width - chunk_border_width
+             * The master simulator is special in comparison to the slaves. As the master holds the complete field, it can 
+             * access all data without copying/synching.
+             * We want the master to have a workload, too; so we give it the first data chunk (the width of the field divided by count of ranks)
+             * 
+             * If we only have one rank, the master will calculate all of them
              */
-            int chunk_index = get_mpi_chunk_index();
-            int border_start = (chunk_index + 1) * get_mpi_chunk_border_width() - get_mpi_chunk_border_width();
-            space_next->raw_copy_to(border_right_connection_send.get_buffer()->data(), border_start, get_mpi_chunk_border_width());
-            border_right_connection_send.flush();
-        }
+            simulate_step(get_mpi_chunk_index(), get_mpi_chunk_width());
 
-        //We do not want to use the queue, so swap read and write buffer.
-        if (APP_PERFTEST)
-        {
-            space->swap();
-        }
-
-        //Measure performance
-        if (ENABLE_PERF_MEASUREMENT)
-        {
-            if (spacetime % 100 == 0)
+            //Send the borders to the ranks that need them
+            //Use space_next!!! We want to send the result of the calculation!
+            if (left_rank != 0)
             {
-                auto perf_time_end = chrono::high_resolution_clock::now();
-                double perf_time_seconds = chrono::duration<double>(perf_time_end - perf_time_start).count();
+                /*
+                 * We want the left border. It starts at chunk_index * chunk_width
+                 */
+                int chunk_index = get_mpi_chunk_index();
+                int border_start = chunk_index * get_mpi_chunk_border_width();
+                space_next->raw_copy_to(border_left_connection_send.get_buffer()->data(), border_start, get_mpi_chunk_border_width());
+                border_left_connection_send.flush();
+            }
+            if (right_rank != 0)
+            {
+                /**
+                 * We want the right border. It starts at (chunk_index + 1) * chunk_width - chunk_border_width
+                 */
+                int chunk_index = get_mpi_chunk_index();
+                int border_start = (chunk_index + 1) * get_mpi_chunk_border_width() - get_mpi_chunk_border_width();
+                space_next->raw_copy_to(border_right_connection_send.get_buffer()->data(), border_start, get_mpi_chunk_border_width());
+                border_right_connection_send.flush();
+            }
 
-                cout << "Simulator | " << (spacetime - perf_spacetime_start) / perf_time_seconds << " calculations / s" << endl;
+            //We do not want to use the queue, so swap read and write buffer.
+            if (APP_PERFTEST)
+            {
+                space->swap();
+            }
 
-                perf_spacetime_start = spacetime;
-                perf_time_start = chrono::high_resolution_clock::now();
+            //Measure performance
+            if (ENABLE_PERF_MEASUREMENT)
+            {
+                if (spacetime % 100 == 0)
+                {
+                    auto perf_time_end = chrono::high_resolution_clock::now();
+                    double perf_time_seconds = chrono::duration<double>(perf_time_end - perf_time_start).count();
+
+                    cout << "Simulator | " << (spacetime - perf_spacetime_start) / perf_time_seconds << " calculations / s" << endl;
+
+                    perf_spacetime_start = spacetime;
+                    perf_time_start = chrono::high_resolution_clock::now();
+                }
             }
         }
     }
