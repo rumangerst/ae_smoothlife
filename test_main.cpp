@@ -6,6 +6,7 @@
 #include "matrix_buffer_queue.h"
 #include "simulator.h"
 
+/* test by ruman*/
 TEST_CASE("Test correct alignment of matrix class", "[matrix][cache]")
 {
     vectorized_matrix<float> matrix = vectorized_matrix<float>(10, 12);
@@ -13,10 +14,40 @@ TEST_CASE("Test correct alignment of matrix class", "[matrix][cache]")
     for (int row = 0; row < matrix.getNumRows(); ++row)
     {
         ulong row_data_start = (ulong) matrix.getRow_ptr(row);
-        REQUIRE(row_data_start % 64 == 0); //The row is aligned to 64 byte
+        REQUIRE(row_data_start % ALIGNMENT == 0); //The row is aligned to 64 byte
     }
 }
 
+TEST_CASE("Test pointer and wrapper correctness of matrix class", "[matrix][cache]")
+{
+    vectorized_matrix<float> matrix = vectorized_matrix<float>(10, 12);
+    const float * data_row = matrix.getValues();
+    
+    WHEN("Pointers initialized")
+    {
+        THEN("Must point into the same address") {
+            REQUIRE(long(data_row) == long(matrix.getValueWrapped_ptr(0,0)));
+        }
+    }
+
+    WHEN("Pointer moved and new values grabbed")
+    {
+        THEN("Both must still point to the same address") {
+            for (int row = 0; row < matrix.getNumRows(); ++row) {
+                data_row = matrix.getRow_ptr(row);
+                for (int col=0; col < matrix.getLd(); ++col ) {
+                    REQUIRE(*data_row == matrix.getValue(col,row));
+                    REQUIRE(*data_row == matrix.getValueWrappedLd(col,row));
+                    REQUIRE(long(data_row) == long(matrix.getValue_ptr(col,row)));
+                    REQUIRE(long(data_row) == long(matrix.getValueWrappedLd_ptr(col,row)));
+                    data_row++;
+                }
+            }
+        }
+    }
+}
+
+/* test by ruman */
 SCENARIO("Test correct behaviour of matrix_buffer_queue", "[matrix][queue]")
 {
 
@@ -93,6 +124,7 @@ SCENARIO("Test correct behaviour of matrix_buffer_queue", "[matrix][queue]")
     }
 }
 
+/* test by ruman */
 SCENARIO("Test optimized simulation: Initialize at center", "[simulator]")
 {
 
@@ -151,7 +183,9 @@ SCENARIO("Test optimized simulation: Initialize at center", "[simulator]")
     }
 }
 
-TEST_CASE("Test optimized simulation: Initialize at left/right border", "[simulator]")
+
+/* test by ruman */
+TEST_CASE("Test optimized simulation: Initialize at left/right border with short time", "[simulator]")
 {
 
     GIVEN("a 400x300 state space with state '1' at the left & right border")
@@ -208,7 +242,8 @@ TEST_CASE("Test optimized simulation: Initialize at left/right border", "[simula
     }
 }
 
-TEST_CASE("Test optimized simulation: Initialize at top/bottom border", "[simulator]")
+/* test by bastian */
+TEST_CASE("Test optimized simulation: Initialize at top/bottom border with short time", "[simulator]")
 {
 
     GIVEN("a 400x300 state space with state '1' at the top & bottom border")
@@ -258,6 +293,67 @@ TEST_CASE("Test optimized simulation: Initialize at top/bottom border", "[simula
                             REQUIRE(unoptimized_value == optimized_value);
                         }
                     }
+                }
+
+            }
+        }
+    }
+}
+
+/* test by bastian */
+TEST_CASE("Test optimized simulation: Initialize at left/right border with long time", "[simulator]")
+{
+
+    GIVEN("a 400x300 state space with state '1' at the left & right border")
+    {
+        vectorized_matrix<float> space = vectorized_matrix<float>(400, 300);
+
+        for (int column = -100; column < 100; ++column)
+        {
+            for (int row = 0; row < 300; ++row)
+            {
+                space.setValueWrapped(1, column, row);
+            }
+        }
+
+        GIVEN("one unoptimized and an optimized simulator")
+        {
+            ruleset rules = ruleset_smooth_life_l(space.getNumCols(), space.getNumRows());
+
+            simulator unoptimized_simulator = simulator(rules);
+            unoptimized_simulator.optimize = false;
+            unoptimized_simulator.initialize(space);
+
+            simulator optimized_simulator = simulator(rules);
+            optimized_simulator.optimize = true;
+            optimized_simulator.initialize(space);
+
+            WHEN("both simulators are simulated 10 steps")
+            {
+                for (int steps = 0; steps < 100; ++steps)
+                {
+                    if (steps%10 == 0) cout << "step: " << steps << endl;
+                    unoptimized_simulator.simulate_step();
+                    optimized_simulator.simulate_step();
+                }
+
+                THEN("both simulators calculated the same state")
+                {
+                    vectorized_matrix<float> space_unoptimized = unoptimized_simulator.get_current_space();
+                    vectorized_matrix<float> space_optimized = optimized_simulator.get_current_space();
+                    bool hasValues = false;
+                    for (int column = 0; column < space.getNumCols(); ++column)
+                    {
+                        for (int row = 0; row < space.getNumRows(); ++row)
+                        {
+                            float unoptimized_value = space_unoptimized.getValue(column, row);
+                            float optimized_value = space_optimized.getValue(column, row);
+                            hasValues |= unoptimized_value == 0.0 || optimized_value == 0.0;
+                            REQUIRE(unoptimized_value == optimized_value);
+                        }
+                    }
+                    
+                    cout << "Field was empty: " << !hasValues << endl;
                 }
 
             }

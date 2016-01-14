@@ -175,6 +175,15 @@ public:
     {
         return M[matrix_index_wrapped(x, y, columns, rows, ld)];
     }
+    
+    /**
+     * - uses ld als width instead of columns
+     * - this is/was needed to test correctness of values inside vectorized code
+     */
+    inline T getValueWrappedLd(cint x, cint y) const
+    {
+        return M[matrix_index_wrapped(x, y, ld, rows, ld)];
+    }
 
     inline const T* getRow_ptr(int y) const
     {
@@ -189,6 +198,11 @@ public:
     inline const T* getValueWrapped_ptr(cint x, cint y) const
     {
         return &M.data()[matrix_index_wrapped(x, y, columns, rows, ld)];
+    }
+    
+    inline const T* getValueWrappedLd_ptr(cint x, cint y) const
+    {
+        return &M.data()[matrix_index_wrapped(x, y, ld, rows, ld)];
     }
 
     inline void setValue(T val, cint x, cint y)
