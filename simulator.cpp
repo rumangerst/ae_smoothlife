@@ -285,6 +285,7 @@ void simulator::run_simulation_slave()
     {
         if (communication_connection.update() == mpi_connection<int>::states::IDLE)
         {
+            cout << "Slave | Got COMMUNICATION signal" << endl;
             int tag = (*communication_connection.get_buffer())[0];
             running = (tag & APP_COMMUNICATION_RUNNING) == APP_COMMUNICATION_RUNNING;
 
@@ -300,6 +301,7 @@ void simulator::run_simulation_slave()
             //Unless first time, copy the borders
             if (spacetime != 0)
             {
+                cout << "Slave | Copy borders from connections ..." << endl;
                 space_current->raw_overwrite(border_left_connection_recieve.get_buffer()->data(), 0, get_mpi_chunk_border_width());
                 space_current->raw_overwrite(border_right_connection_recieve.get_buffer()->data(), get_mpi_chunk_border_width() + get_mpi_chunk_width(), get_mpi_chunk_border_width());
 
@@ -307,6 +309,7 @@ void simulator::run_simulation_slave()
                 border_right_connection_recieve.flush();
             }
 
+            cout << "Slave | Simulating" << endl;
             /**
              * The slave simulator only has to simulate one chunk. So we call simulate_step with this size.
              * The simulator obtains its left and right borders from the neighbors via MPI. The data is stored in the border area left and right
@@ -315,12 +318,14 @@ void simulator::run_simulation_slave()
             simulate_step(get_mpi_chunk_border_width(), get_mpi_chunk_width());
             space->swap(); //The queue is disabled, use swap which yields greater performance
 
+            cout << "Slave | Copy field to space connection" << endl;
             //Copy the complete field into the space buffer and the borders into their respective buffers
             space_current->raw_copy_to(space_connection.get_buffer()->data(), get_mpi_chunk_border_width(), get_mpi_chunk_width());
             space_connection.flush();
 
             if (left_rank != 0)
             {
+                cout << "Slave | Update left rank = " << left_rank << endl;
                 /**
                  * We want the left border. It starts at chunk_border_width
                  */
@@ -329,6 +334,7 @@ void simulator::run_simulation_slave()
             }
             if (right_rank != 0)
             {
+                cout << "Slave | Update right rank = " << right_rank << endl;
                 /**
                  * We want the right border. It starts at chunk_border_width + chunk_width - chunk_border_width = chunk_width
                  */
@@ -420,7 +426,9 @@ void simulator::run_simulation_master()
         {
             //Integrate data from slaves if not first time
             if (spacetime != 0)
-            {                
+            {
+                cout << "Master | Getting data from slaves" << endl;  
+                
                 for (mpi_connection<float> & conn : space_connections)
                 {
                     int chunk_index = get_mpi_chunk_index(conn.get_rank_sender());
@@ -431,7 +439,7 @@ void simulator::run_simulation_master()
                 }
             }
 
-
+            cout << "Master | Simulating" << endl;
             /**
              * The master simulator is special in comparison to the slaves. As the master holds the complete field, it can 
              * access all data without copying/synching.
@@ -445,6 +453,7 @@ void simulator::run_simulation_master()
             //Use space_next!!! We want to send the result of the calculation!
             if (left_rank != 0)
             {
+                cout << "Master | Updating left rank =  " << left_rank << endl;
                 /*
                  * We want the left border. It starts at chunk_index * chunk_width
                  */
@@ -455,6 +464,7 @@ void simulator::run_simulation_master()
             }
             if (right_rank != 0)
             {
+                cout << "Master | Updating right rank = " << right_rank << endl;
                 /**
                  * We want the right border. It starts at (chunk_index + 1) * chunk_width - chunk_border_width
                  */
