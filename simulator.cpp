@@ -437,18 +437,24 @@ float simulator::getFilling(cint at_x, cint at_y, const vector<vectorized_matrix
             // special case 4. Access of right border. Tested
             for (int y = YB; y < YE; ++y)
             {
+                cfloat const * s_row = sim_space + XB + y*sim_ld;
+                cfloat const * m_row = mask_space + (y - YB) * mask_ld;   // mask row
+                assert(!(long(s_row) % ALIGNMENT || long(m_row) % ALIGNMENT));
+                #pragma omp simd aligned(s_row, m_row:64) reduction(+:f)
                 for (int x = 0; x < rules.get_space_width() - XB; ++x)
-                    f += sim_space[x + XB + y*sim_ld] * mask_space[x + (y - YB) * mask_ld];
+                    f += s_row[x] * m_row[x];
             }
             
             
-            //cint mask_x_off = mask.getLd() - (XE - rules.get_space_width()) - 1;
             cint mask_x_off = rules.get_space_width() - XB;
-            // semi-optimized, wrapped access over the right border
             for (int y = YB; y < YE; ++y)
             {
+                cfloat const * s_row = sim_space + y*sim_ld;
+                cfloat const * m_row = mask_space + mask_x_off + (y - YB) * mask_ld;   // mask row
+                assert(!(long(s_row) % ALIGNMENT || long(m_row) % ALIGNMENT));
+                #pragma omp simd aligned(s_row, m_row:64) reduction(+:f)
                 for (int x = 0; x < XE-rules.get_space_width(); ++x)
-                    f += sim_space[x + y*sim_ld] * mask_space[x + mask_x_off + (y - YB) * mask_ld];
+                    f += s_row[x] * m_row[x];
             }
         }
         else
@@ -469,38 +475,26 @@ float simulator::getFilling(cint at_x, cint at_y, const vector<vectorized_matrix
         cint mask_x_off = -XB;
         for (int y = YB; y < YE; ++y)
         {
-            cint Y = y*sim_ld;
-            cint YB_ = mask_x_off + (y - YB) * mask_ld;
+            cfloat const * s_row = sim_space + y*sim_ld;
+            cfloat const * m_row = mask_space + mask_x_off + (y - YB) * mask_ld;   // mask row
+            assert(!(long(s_row) % ALIGNMENT || long(m_row) % ALIGNMENT));
+            #pragma omp simd aligned(s_row, m_row:64) reduction(+:f)
             for (int x = 0; x < XE; ++x)
-                f += sim_space[x + Y] * mask_space[x + YB_];
+                f += s_row[x] * m_row[x];
+                //f += sim_space[x + y*sim_ld] * mask_space[x + mask_x_off + (y - YB) * mask_ld];
         }
         
         // wrapped part. we are on the right now
         for (int y = YB; y < YE; ++y)
         {
-            cint Y = y*sim_ld + rules.get_space_width() + XB;
-            cint YB_ = (y - YB) * mask_ld;
+            cfloat const * s_row = sim_space + y*sim_ld + rules.get_space_width() + XB;
+            cfloat const * m_row = mask_space + (y - YB) * mask_ld;   // mask row
+            assert(!(long(s_row) % ALIGNMENT || long(m_row) % ALIGNMENT));
+            #pragma omp simd aligned(s_row, m_row:64) reduction(+:f)
             for (int x = 0; x < -XB; ++x)
-                f += sim_space[x + Y] * mask_space[x + YB_];
+                //f += sim_space[x + y*sim_ld + rules.get_space_width() + XB] * mask_space[x + (y - YB) * mask_ld];
+                f += s_row[x] * m_row[x];
         }
-        
-        /*
-        // special case 3. Access over left border. Tested
-        cint mask_x_off = -XB;
-        for (int y = YB; y < YE; ++y)
-        {
-            for (int x = 0; x < XE; ++x)
-                f += sim_space[x + y*sim_ld] * mask_space[x + mask_x_off + (y - YB) * mask_ld];
-        }
-
-        // wrapped part. we are on the right now
-        cint XB_new = rules.get_space_width() + XB;
-        for (int y = YB; y < YE; ++y)
-        {
-            for (int x = XB_new; x < rules.get_space_width(); ++x)
-                f += sim_space[x + y*sim_ld] * mask_space[x - XB_new + (y - YB) * mask_ld];
-        }
-        */
     }
     else
     {

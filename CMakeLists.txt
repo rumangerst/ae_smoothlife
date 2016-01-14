@@ -96,7 +96,7 @@ endif()
 set_target_properties(smoothlife_mpi_host PROPERTIES COMPILE_FLAGS "-DAPP_GUI=true -DAPP_SIM=true -DGUI_TYPE=${GUI_TYPE}  -DAPP_PERFTEST=false")
 target_link_libraries(smoothlife_mpi_host ${SDL2_LIBRARY} ${OPENGL_gl_LIBRARY} ${OPENGL_glu_LIBRARY} ${GLEW_LIBRARIES} ${Boost_LIBRARIES})
 
-set_target_properties(smoothlife_mpi_perftest PROPERTIES COMPILE_FLAGS "-DAPP_GUI=false -DAPP_SIM=true -DAPP_PERFTEST=true")
+set_target_properties(smoothlife_mpi_perftest PROPERTIES COMPILE_FLAGS "-DAPP_GUI=false -DAPP_SIM=true -DAPP_PERFTEST=true -DNDEBUG")
 target_link_libraries(smoothlife_mpi_perftest ${Boost_LIBRARIES})
 
 set_target_properties(smoothlife_tests PROPERTIES COMPILE_FLAGS "-DAPP_SIM=true -DAPP_GUI=false -DAPP_PERFTEST=false")
