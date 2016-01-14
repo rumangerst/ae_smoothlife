@@ -405,40 +405,14 @@ void simulator::run_simulation_master()
     space->buffer_read_ptr()->raw_copy_to(buffer_space.data());
     MPI_Bcast(buffer_space.data(), rules.get_space_width() * rules.get_space_height(), MPI_FLOAT, 0, MPI_COMM_WORLD);
 
+    bool master_simulated = false;
+    bool space_complete = false;
+
     while (running)
     {
-        bool slaves_ready = true;
-        bool queue_ready = APP_PERFTEST || spacetime == 0;
-
-        slaves_ready &= border_left_connection_send.update() == mpi_connection<float>::states::IDLE;
-        slaves_ready &= border_right_connection_send.update() == mpi_connection<float>::states::IDLE;
-        
-        for (mpi_connection<float> & conn : space_connections)
+        // Simulate the master if it did not yet
+        if (!space_complete && !master_simulated)
         {
-            slaves_ready &= conn.update() == mpi_connection<float>::states::IDLE;
-        }
-
-        /**
-         * Simulate only the first time or when the buffer_queue can enqueue the current read buffer.
-         * If we only test performance never push into queue and always simulate.
-         */
-        if (slaves_ready && (queue_ready || space->push())) //Caution!!! Side effects!!!
-        {
-            //Integrate data from slaves if not first time
-            if (spacetime != 0)
-            {
-                cout << "Master | Getting data from slaves" << endl;  
-                
-                for (mpi_connection<float> & conn : space_connections)
-                {
-                    int chunk_index = get_mpi_chunk_index(conn.get_rank_sender());
-                    space_current->raw_overwrite(conn.get_buffer()->data(), chunk_index * get_mpi_chunk_width(), get_mpi_chunk_width());
-
-                    //Ask for new data
-                    conn.flush();
-                }
-            }
-
             cout << "Master | Simulating" << endl;
             /**
              * The master simulator is special in comparison to the slaves. As the master holds the complete field, it can 
@@ -449,50 +423,97 @@ void simulator::run_simulation_master()
              */
             simulate_step(get_mpi_chunk_index(), get_mpi_chunk_width());
 
-            //Send the borders to the ranks that need them
-            //Use space_next!!! We want to send the result of the calculation!
-            if (left_rank != 0)
+            master_simulated = true;
+        }
+
+        if (!space_complete)
+        {
+            //Update the status of our connections
+            bool slaves_ready = master_simulated;
+
+            slaves_ready &= border_left_connection_send.update() == mpi_connection<float>::states::IDLE;
+            slaves_ready &= border_right_connection_send.update() == mpi_connection<float>::states::IDLE;
+
+            for (mpi_connection<float> & conn : space_connections)
             {
-                cout << "Master | Updating left rank =  " << left_rank << endl;
-                /*
-                 * We want the left border. It starts at chunk_index * chunk_width
-                 */
-                int chunk_index = get_mpi_chunk_index();
-                int border_start = chunk_index * get_mpi_chunk_border_width();
-                space_next->raw_copy_to(border_left_connection_send.get_buffer()->data(), border_start, get_mpi_chunk_border_width());
-                border_left_connection_send.flush();
-            }
-            if (right_rank != 0)
-            {
-                cout << "Master | Updating right rank = " << right_rank << endl;
-                /**
-                 * We want the right border. It starts at (chunk_index + 1) * chunk_width - chunk_border_width
-                 */
-                int chunk_index = get_mpi_chunk_index();
-                int border_start = (chunk_index + 1) * get_mpi_chunk_border_width() - get_mpi_chunk_border_width();
-                space_next->raw_copy_to(border_right_connection_send.get_buffer()->data(), border_start, get_mpi_chunk_border_width());
-                border_right_connection_send.flush();
+                slaves_ready &= conn.update() == mpi_connection<float>::states::IDLE;
             }
 
-            //We do not want to use the queue, so swap read and write buffer.
+            /**
+             * If all slaves (including the master's own activity) is finished, put everything together
+             */
+            if (slaves_ready)
+            {
+                //Integrate data from slaves if not first time
+                if (spacetime != 0)
+                {
+                    cout << "Master | Getting data from slaves" << endl;
+
+                    for (mpi_connection<float> & conn : space_connections)
+                    {
+                        int chunk_index = get_mpi_chunk_index(conn.get_rank_sender());
+                        space_next->raw_overwrite(conn.get_buffer()->data(), chunk_index * get_mpi_chunk_width(), get_mpi_chunk_width());
+
+                        //Ask for new data
+                        conn.flush();
+                    }
+                }
+
+                //Send the borders to the ranks that need them
+                //Use space_next!!! We want to send the result of the calculation!
+                if (left_rank != 0)
+                {
+                    cout << "Master | Updating left rank =  " << left_rank << endl;
+                    /*
+                     * We want the left border. It starts at chunk_index * chunk_width
+                     */
+                    int chunk_index = get_mpi_chunk_index();
+                    int border_start = chunk_index * get_mpi_chunk_border_width();
+                    space_next->raw_copy_to(border_left_connection_send.get_buffer()->data(), border_start, get_mpi_chunk_border_width());
+                    border_left_connection_send.flush();
+                }
+                if (right_rank != 0)
+                {
+                    cout << "Master | Updating right rank = " << right_rank << endl;
+                    /**
+                     * We want the right border. It starts at (chunk_index + 1) * chunk_width - chunk_border_width
+                     */
+                    int chunk_index = get_mpi_chunk_index();
+                    int border_start = (chunk_index + 1) * get_mpi_chunk_border_width() - get_mpi_chunk_border_width();
+                    space_next->raw_copy_to(border_right_connection_send.get_buffer()->data(), border_start, get_mpi_chunk_border_width());
+                    border_right_connection_send.flush();
+                }
+
+                //Measure performance now as space is completed
+                if (ENABLE_PERF_MEASUREMENT)
+                {
+                    if (spacetime % 100 == 0)
+                    {
+                        auto perf_time_end = chrono::high_resolution_clock::now();
+                        double perf_time_seconds = chrono::duration<double>(perf_time_end - perf_time_start).count();
+
+                        cout << "Simulator | " << (spacetime - perf_spacetime_start) / perf_time_seconds << " calculations / s" << endl;
+
+                        perf_spacetime_start = spacetime;
+                        perf_time_start = chrono::high_resolution_clock::now();
+                    }
+                }
+
+                space_completed = true;
+            }
+        }
+
+        //If space is completed we push it into the queue or just swap it
+        if (space_complete)
+        {
             if (APP_PERFTEST)
             {
                 space->swap();
+                space_complete = false; //Next step
             }
-
-            //Measure performance
-            if (ENABLE_PERF_MEASUREMENT)
+            else
             {
-                if (spacetime % 100 == 0)
-                {
-                    auto perf_time_end = chrono::high_resolution_clock::now();
-                    double perf_time_seconds = chrono::duration<double>(perf_time_end - perf_time_start).count();
-
-                    cout << "Simulator | " << (spacetime - perf_spacetime_start) / perf_time_seconds << " calculations / s" << endl;
-
-                    perf_spacetime_start = spacetime;
-                    perf_time_start = chrono::high_resolution_clock::now();
-                }
+                space_complete = space->push(); //Next step if queue is not full
             }
         }
     }
