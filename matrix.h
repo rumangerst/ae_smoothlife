@@ -392,6 +392,11 @@ public:
     
     /**
      * @brief Overwrites a horizontal slice of this matrix with a horizontal slice of a raw matrix with same row count.
+     * @param ptr the source
+     * @param src_x_start slice start x coordinate (column) in source
+     * @param dst_x_start slice start x coordinate (column) in destination (this matrix)
+     * @param w slice width
+     * @param src_column column count of source
      */
     void raw_overwrite(T * ptr, int src_x_start, int dst_x_start, int w, int src_columns)
     {
@@ -414,7 +419,7 @@ public:
      */
     void raw_overwrite(T * ptr, int x_start, int w)
     {
-        raw_overwrite(ptr, x_start, 0, w, w);
+        raw_overwrite(ptr, 0, x_start, w, w);
         
         /*for(int y = 0; y < getNumRows();++y)
         {
