@@ -111,6 +111,22 @@ public:
 private:
     
     /**
+     * @brief Returns the chunk that is calculated by rank of
+     */
+    int get_mpi_chunk_index(int of)
+    {
+        return (of + 1) % mpi_comm_size();
+    }
+    
+    /**
+     * @brief Returns the chunk that is calculated by this rank
+     */
+    int get_mpi_chunk_index()
+    {
+        return get_mpi_chunk_index(mpi_rank());
+    }
+    
+    /**
      * @brief Returns the size of the border of a slave simulator chunk
      * @return 
      */

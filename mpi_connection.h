@@ -50,7 +50,13 @@ public:
     mpi_connection(_sender,_reciever,_tag,_datatype,aligned_vector<T>(_buffer_size))
     
     {
-    }          
+    }    
+    
+    ~mpi_connection()
+    {
+        cancel();
+    }
+
     
     /**
     * @brief Returns the buffer if state is IDLE if sender and state is IDLE

@@ -41,7 +41,18 @@ void simulator::initialize(vectorized_matrix<float> & predefined_space)
 
     cout << "Initializing ..." << endl;
 
-    space = new matrix_buffer_queue<float>(SPACE_QUEUE_MAX_SIZE, predefined_space);
+    // Determine the queue size
+    // If have a master simulator, we NEED a queue -> set it to SPACE_QUEUE_MAX_SIZE
+    // A slave simulator or perftest-master simulator does not need a queue and it's overhead
+    // Set it to 0 then, so we can use swap()
+    int queue_size;
+
+    if (!APP_PERFTEST && mpi_get_role() == mpi_role::SIMULATOR_MASTER)
+        queue_size = SPACE_QUEUE_MAX_SIZE;
+    else
+        queue_size = 0;
+
+    space = new matrix_buffer_queue<float>(queue_size, predefined_space);
 
     //space_current = new vectorized_matrix<float>(predefined_space);
     //space_next = new vectorized_matrix<float>(rules.get_space_width(), rules.get_space_height());
@@ -265,8 +276,7 @@ void simulator::run_simulation_slave()
     // Use broadcast to obtain the initial space from master
     vector<float> buffer_space = vector<float>(rules.get_space_width() * rules.get_space_height());
     MPI_Bcast(buffer_space.data(), rules.get_space_width() * rules.get_space_height(), MPI_FLOAT, 0, MPI_COMM_WORLD);
-    space->buffer_read_ptr()->raw_overwrite(buffer_space.data());
-
+    space_current->raw_overwrite(buffer_space.data(), get_mpi_chunk_index() * get_mpi_chunk_width(), get_mpi_chunk_border_width(), get_mpi_chunk_width(), rules.get_space_width());
 
     running = true;
     communication_connection.flush();
@@ -281,32 +291,49 @@ void simulator::run_simulation_slave()
             communication_connection.flush();
         }
 
-        cerr << "TODO" << endl;
-        exit(-1);
-        //TODO: Recieve borders and integrate them into the current field
-
-        if (space_connection.update() == mpi_connection<float>::states::IDLE)
+        if (space_connection.update() == mpi_connection<float>::states::IDLE
+                & border_left_connection_recieve.update() == mpi_connection<float>::states::IDLE
+                & border_right_connection_recieve.update() == mpi_connection<float>::states::IDLE
+                & border_left_connection_send.update() == mpi_connection<float>::states::IDLE
+                & border_right_connection_send.update() == mpi_connection<float>::states::IDLE)
         {
+            //Unless first time, copy the borders
+            if (spacetime != 0)
+            {
+                space_current->raw_overwrite(border_left_connection_recieve.get_buffer()->data(), 0, get_mpi_chunk_border_width());
+                space_current->raw_overwrite(border_right_connection_recieve.get_buffer()->data(), get_mpi_chunk_border_width() + get_mpi_chunk_width(), get_mpi_chunk_border_width());
+
+                border_left_connection_recieve.flush();
+                border_right_connection_recieve.flush();
+            }
+
             /**
              * The slave simulator only has to simulate one chunk. So we call simulate_step with this size.
              * The simulator obtains its left and right borders from the neighbors via MPI. The data is stored in the border area left and right
              * to the chunk area. This border area has a size % CACHELINE_SIZE
              */
             simulate_step(get_mpi_chunk_border_width(), get_mpi_chunk_width());
-            space->push();
+            space->swap(); //The queue is disabled, use swap which yields greater performance
 
-            //Write the data into the connection buffer and start sending of the data        
-            space->pop(space_connection.get_buffer()->data());
+            //Copy the complete field into the space buffer and the borders into their respective buffers
+            space_current->raw_copy_to(space_connection.get_buffer()->data(), get_mpi_chunk_border_width(), get_mpi_chunk_width());
             space_connection.flush();
 
-            //Send the borders if it's not the master simulator
             if (left_rank != 0)
             {
-                cerr << "TODO" << endl;
+                /**
+                 * We want the left border. It starts at chunk_border_width
+                 */
+                space_current->raw_copy_to(border_left_connection_send.get_buffer()->data(), get_mpi_chunk_border_width(), get_mpi_chunk_border_width());
+                border_left_connection_send.flush();
             }
             if (right_rank != 0)
             {
-                cerr << "TODO" << endl;
+                /**
+                 * We want the right border. It starts at chunk_border_width + chunk_width - chunk_border_width = chunk_width
+                 */
+                space_current->raw_copy_to(border_right_connection_send.get_buffer()->data(), get_mpi_chunk_width(), get_mpi_chunk_border_width());
+                border_right_connection_send.flush();
             }
 
         }
@@ -326,6 +353,7 @@ void simulator::run_simulation_master()
 #endif    
 
     vector<mpi_connection<int>> communication_connections;
+    vector<mpi_connection<float>> space_connections;
 
     for (int i = 1; i < mpi_comm_size(); ++i)
     {
@@ -338,60 +366,119 @@ void simulator::run_simulation_master()
                                             aligned_vector<int>{APP_COMMUNICATION_RUNNING}));
     }
 
+    for (int i = 1; i < mpi_comm_size(); ++i)
+    {
+        // Connection from slave to master (calculated spaces)
+        space_connections.push_back(mpi_connection<float>(
+                                    i,
+                                    0,
+                                    APP_MPI_TAG_SPACE,
+                                    rules.get_space_height() * get_mpi_chunk_border_width(),
+                                    MPI_FLOAT));
+    }
+
     // The master has connections to the left and right rank to synchronize borders
     int left_rank = matrix_index_wrapped(mpi_rank() - 1, 1, mpi_comm_size(), 1, mpi_comm_size());
     int right_rank = matrix_index_wrapped(mpi_rank() + 1, 1, mpi_comm_size(), 1, mpi_comm_size());
+
+    mpi_connection<float> border_left_connection_send = mpi_connection<float>(
+            mpi_rank(),
+            left_rank,
+            APP_MPI_TAG_BORDER_LEFT,
+            rules.get_space_height() * get_mpi_chunk_border_width(),
+            MPI_FLOAT);
+    mpi_connection<float> border_right_connection_send = mpi_connection<float>(
+            mpi_rank(),
+            right_rank,
+            APP_MPI_TAG_BORDER_RIGHT,
+            rules.get_space_height() * get_mpi_chunk_border_width(),
+            MPI_FLOAT);
 
     //Send the initial field to all slaves   
     vector<float> buffer_space = vector<float>(rules.get_space_width() * rules.get_space_height());
     space->buffer_read_ptr()->raw_copy_to(buffer_space.data());
     MPI_Bcast(buffer_space.data(), rules.get_space_width() * rules.get_space_height(), MPI_FLOAT, 0, MPI_COMM_WORLD);
-    
-    //TODO: left/right border sync
 
     while (running)
     {
-        // Calculate the next state if simulation is enabled
-        // Separate the actual simulation from interfacing            
+        bool slaves_ready = true;
+        bool queue_ready = APP_PERFTEST || spacetime == 0 || space->push(); //Note: Sideeffect of space->push()!!!
 
-        if (SIMULATOR_MODE == MODE_SIMULATE)
+        for (mpi_connection<float> & conn : space_connections)
+        {
+            slaves_ready &= conn.update() == mpi_connection<float>::states::IDLE;
+        }
+
+        /**
+         * Simulate only the first time or when the buffer_queue can enqueue the current read buffer.
+         * If we only test performance never push into queue and always simulate.
+         */
+        if (slaves_ready & queue_ready)
+        {
+            //Integrate data from slaves if not first time
+            if (spacetime != 0)
+            {
+                for (mpi_connection<float> & conn : space_connections)
+                {
+                    int chunk_index = get_mpi_chunk_index(conn.get_rank_sender());
+                    space_current->raw_overwrite(conn.get_buffer()->data(), chunk_index * get_mpi_chunk_width(), get_mpi_chunk_width());
+                    
+                    //Ask for new data
+                    conn.flush();
+                }
+            }
+        }
+
+        /**
+         * The master simulator is special in comparison to the slaves. As the master holds the complete field, it can 
+         * access all data without copying/synching.
+         * We want the master to have a workload, too; so we give it the first data chunk (the width of the field divided by count of ranks)
+         * 
+         * If we only have one rank, the master will calculate all of them
+         */
+        simulate_step(get_mpi_chunk_index(), get_mpi_chunk_width());
+
+        //Send the borders to the ranks that need them
+        //Use space_next!!! We want to send the result of the calculation!
+        if (left_rank != 0)
+        {
+            /*
+             * We want the left border. It starts at chunk_index * chunk_width
+             */
+            int chunk_index = get_mpi_chunk_index();
+            int border_start = chunk_index * get_mpi_chunk_border_width();
+            space_next->raw_copy_to(border_left_connection_send.get_buffer()->data(), border_start, get_mpi_chunk_border_width());
+            border_left_connection_send.flush();
+        }
+        if (right_rank != 0)
         {
             /**
-             * Simulate only the first time or when the buffer_queue can enqueue the current read buffer.
-             * If we only test performance never push into queue and always simulate.
+             * We want the right border. It starts at (chunk_index + 1) * chunk_width - chunk_border_width
              */
-            if (APP_PERFTEST || spacetime == 0 || space->push())
+            int chunk_index = get_mpi_chunk_index();
+            int border_start = (chunk_index + 1) * get_mpi_chunk_border_width() - get_mpi_chunk_border_width();
+            space_next->raw_copy_to(border_right_connection_send.get_buffer()->data(), border_start, get_mpi_chunk_border_width());
+            border_right_connection_send.flush();
+        }
+
+        //We do not want to use the queue, so swap read and write buffer.
+        if (APP_PERFTEST)
+        {
+            space->swap();
+        }
+
+        //Measure performance
+        if (ENABLE_PERF_MEASUREMENT)
+        {
+            if (spacetime % 100 == 0)
             {
-                /**
-                 * The master simulator is special in comparison to the slaves. As the master holds the complete field, it can 
-                 * access all data without copying/synching.
-                 * We want the master to have a workload, too; so we give it the first data chunk (the width of the field divided by count of ranks)
-                 * 
-                 * If we only have one rank, the master will calculate all of them
-                 */
-                simulate_step(0, get_mpi_chunk_width());
+                auto perf_time_end = chrono::high_resolution_clock::now();
+                double perf_time_seconds = chrono::duration<double>(perf_time_end - perf_time_start).count();
 
-                //We need to ensure a realistic situation, so we push the data to the queue and then directly remove it
-                if (APP_PERFTEST)
-                {
-                    space->push();
-                    space->pop();
-                }
+                cout << "Simulator | " << (spacetime - perf_spacetime_start) / perf_time_seconds << " calculations / s" << endl;
 
-                //Measure performance
-                if (ENABLE_PERF_MEASUREMENT)
-                {
-                    if (spacetime % 100 == 0)
-                    {
-                        auto perf_time_end = chrono::high_resolution_clock::now();
-                        double perf_time_seconds = chrono::duration<double>(perf_time_end - perf_time_start).count();
-
-                        cout << "Simulator | " << (spacetime - perf_spacetime_start) / perf_time_seconds << " calculations / s" << endl;
-
-                        perf_spacetime_start = spacetime;
-                        perf_time_start = chrono::high_resolution_clock::now();
-                    }
-                }
+                perf_spacetime_start = spacetime;
+                perf_time_start = chrono::high_resolution_clock::now();
             }
         }
     }
@@ -557,19 +644,19 @@ float simulator::getFilling(cint at_x, cint at_y, const vector<vectorized_matrix
             //cout << "XE: " << XE << endl;
             //mask.print_info();
             if(XE > mask.getLd()) {
-                mask.print_info();
-                mask.print_to_console();
+            mask.print_info();
+            mask.print_to_console();
             }
             assert(XE <= mask.getLd());
             assert(long(&mask.getValues()[mask_x_off+off_new]) % ALIGNMENT == 0);  
 
             // optimized, wrapped access over the right border
             for (int y = YB; y < YE; ++y) {
-                cint Y = y*sim_ld;
-                //cint YB_ = mask_x_off + (y - YB) * mask_ld;
-                for (int x = 0; x < (XE - rules.get_space_width()); ++x)
-                    f += space_current->getValue(x, y) * mask.getValue(x + mask_x_off + off_new, y - YB);
-                    //f += sim_space[x + Y] * mask_space[x + YB_];
+            cint Y = y*sim_ld;
+            //cint YB_ = mask_x_off + (y - YB) * mask_ld;
+            for (int x = 0; x < (XE - rules.get_space_width()); ++x)
+            f += space_current->getValue(x, y) * mask.getValue(x + mask_x_off + off_new, y - YB);
+            //f += sim_space[x + Y] * mask_space[x + YB_];
             }
              */
 
@@ -631,6 +718,7 @@ float simulator::getFilling(cint at_x, cint at_y, const vector<vectorized_matrix
         {
             cint Y = y;
             cint YB_ = (y - YB) * mask_ld - XB;
+
             for (int x = XB; x < XE; ++x)
                 f += space_current->getValueWrapped(x, y) * mask_space[x + YB_];
         }
@@ -804,6 +892,7 @@ float simulator::getFilling_peeled(cint at_x, cint at_y, const vector<vectorized
         {
             cint Y = y;
             cint YB_ = offset + (y - YB) * mask_ld - XB;
+
             for (int x = XB; x < XE; ++x)
                 f += space_current->getValueWrapped(x, y) * mask_space[x + YB_];
         }

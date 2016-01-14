@@ -175,6 +175,11 @@ public:
     {
         return M[matrix_index_wrapped(x, y, columns, rows, ld)];
     }
+    
+    inline T* getRow_ptr(int y)
+    {
+        return &M.data()[matrix_index(0, y, ld)];
+    }
 
     inline const T* getRow_ptr(int y) const
     {
@@ -370,35 +375,72 @@ public:
     }
     
     /**
-     * @brief Writes the raw data (without padding) into ptr. ptr must have size of at least rows * columns. Writes data in row major.
+     * @brief Copies a horizontal slice of this matrix into ptr.
      * @param data
      * @author Ruman
      */
-    void raw_copy_to(T * ptr)
+    void raw_copy_to(T * ptr, int x_start, int w)
     {
         for(int y = 0; y < getNumRows();++y)
         {
-            for(int x = 0; x < getNumCols();++x)
+            for(int x = x_start; x < x_start + w;++x)
             {
-                ptr[matrix_index(x,y,getNumCols())] = getValue(x,y);
+                ptr[matrix_index(x - x_start,y,w)] = getValue(x,y);
             }
         }
     }
     
     /**
-     * @brief Writes raw data from ptr into this matrix. ptr has no padding (ld = columns).
+     * @brief Overwrites a horizontal slice of this matrix with a horizontal slice of a raw matrix with same row count.
+     */
+    void raw_overwrite(T * ptr, int src_x_start, int dst_x_start, int w, int src_columns)
+    {
+        for(int y = 0; y < getNumRows(); ++y)
+        {
+            T * src_row = &ptr[y * src_columns];
+            T * dst_row = getRow_ptr(y);
+            
+            for(int x = 0; x < w; ++x)
+            {
+                dst_row[x + dst_x_start] = src_row[x + src_x_start];
+            }
+        }
+    }
+    
+    /**
+     * @brief Overwrites horizontal slice of this matrix with a raw matrix.
      * @param ptr
      * @author Ruman
      */
+    void raw_overwrite(T * ptr, int x_start, int w)
+    {
+        raw_overwrite(ptr, x_start, 0, w, w);
+        
+        /*for(int y = 0; y < getNumRows();++y)
+        {
+            for(int x = x_start; x < x_start + w;++x)
+            {
+                setValue(ptr[matrix_index(x - x_start,y,w)],x,y);
+            }
+        }*/
+    }
+    
+    /**
+     * @brief Writes all data from this matrix into a raw matrix
+     * @param ptr
+     */
+    void raw_copy_to(T * ptr)
+    {
+        raw_copy_to(ptr, 0, getNumCols());
+    }
+    
+    /**
+     * @brief Overwrites all data in this matrix with a raw matrix.
+     * @param ptr
+     */
     void raw_overwrite(T * ptr)
     {
-        for(int y = 0; y < getNumRows();++y)
-        {
-            for(int x = 0; x < getNumCols();++x)
-            {
-                setValue(ptr[matrix_index(x,y,getNumCols())],x,y);
-            }
-        }
+        raw_overwrite(ptr, 0, getNumCols());
     }
 };
 
