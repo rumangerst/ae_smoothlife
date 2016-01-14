@@ -320,7 +320,7 @@ void simulator::run_simulation_slave()
 
             cout << "Slave | Copy field to space connection" << endl;
             //Copy the complete field into the space buffer and the borders into their respective buffers
-            ////space_current->raw_copy_to(space_connection.get_buffer()->data(), get_mpi_chunk_border_width(), get_mpi_chunk_width());
+            space_current->raw_copy_to(space_connection.get_buffer()->data(), get_mpi_chunk_border_width(), get_mpi_chunk_width());
             space_connection.flush();
 
             if (left_rank != 0)
@@ -432,7 +432,7 @@ void simulator::run_simulation_master()
                 for (mpi_connection<float> & conn : space_connections)
                 {
                     int chunk_index = get_mpi_chunk_index(conn.get_rank_sender());
-                    ////space_current->raw_overwrite(conn.get_buffer()->data(), chunk_index * get_mpi_chunk_width(), get_mpi_chunk_width());
+                    space_current->raw_overwrite(conn.get_buffer()->data(), chunk_index * get_mpi_chunk_width(), get_mpi_chunk_width());
 
                     //Ask for new data
                     conn.flush();
