@@ -122,7 +122,7 @@ public:
         this->columns = columns;
         this->ld = ld;
         this->offset = 0;
-        this->leftOffset = columns / 2;
+        this->leftOffset = ceil(columns / 2);
         this->rightOffset = ld - leftOffset;
     }
 

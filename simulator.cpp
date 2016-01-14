@@ -16,8 +16,16 @@
  * 1. test it
  * 2. consider further optimizations
  * 
- * TODO: Parallelization
  */
+#define EPSILON 5.0e-5
+
+inline bool isEqual(cfloat a, cfloat b, cfloat deviation) {
+    return abs(a - b) < deviation;
+}
+
+inline bool isEqual(cfloat a, cfloat b) {
+    return isEqual(a,b, EPSILON);
+}
 
 simulator::simulator(const ruleset & r) : rules(r)
 {
@@ -166,19 +174,19 @@ void simulator::simulate_step()
 
 void simulator::simulate_step(int x_start, int w)
 {
-#pragma omp parallel for schedule(static)
+    #pragma omp parallel for schedule(static)
     for (int x = x_start; x < x_start + w; ++x)
-    {
+    {        
         for (int y = 0; y < rules.get_space_height(); ++y)
         {
+            float n;
+            float m;        
+
             // get the alignment offset caused during iteration of space
             cint off = ((x - offset_from_mask_center) >= 0) ?
                     (x - offset_from_mask_center) % CACHELINE_FLOATS :
                     CACHELINE_FLOATS - ((offset_from_mask_center - x)); // looks ugly, right? Only important for right borders
             assert(off >= 0 && off < CACHELINE_FLOATS);
-
-            float n;
-            float m;
             //(x - offset_from_mask_center) >= 0
             //(x + outer_masks[off].getRightOffset() < this->space_current->getNumCols()))
             if (optimize && (x - offset_from_mask_center) >= 0 && (x + outer_masks[off].getRightOffset() < this->space_current->getNumCols()))
@@ -199,10 +207,10 @@ void simulator::simulate_step(int x_start, int w)
                 n = getFilling_unoptimized(x, y, inner_masks[0], inner_mask_sum); // filling of inner circle
                 m = getFilling_unoptimized(x, y, outer_masks[0], outer_mask_sum); // filling of outer ring
             }
+            
             //Calculate the new state based on fillings n and m
             //Smooth state function must be clamped to [0,1] (this is also done by author's implementation!)
             space_next->setValue(rules.get_is_discrete() ? discrete_state_func_1(n, m) : fmax(0, fmin(1, next_step_as_euler(x, y, n, m))), x, y);
-
         }
     }
 
@@ -375,8 +383,8 @@ float simulator::getFilling(cint at_x, cint at_y, const vector<vectorized_matrix
                 }
                 else
                 {
+                    // both loops have the same offset & mask!
                     // special case 2. Ideally vectorized. Access over bottom border
-                    //f += do_easy_loop(sim_space, mask_space, sim_ld, mask_ld, XB, XE, YB, rules.get_space_height());
                     for (int y = YB; y < rules.get_space_height(); ++y)
                     {
                         cfloat const * s_row = sim_space + y*sim_ld + XB;         // space row + x_start
@@ -386,43 +394,45 @@ float simulator::getFilling(cint at_x, cint at_y, const vector<vectorized_matrix
                         for (int x = 0; x < XE-XB; ++x)
                             f += s_row[x] * m_row[x];
                     }
-
-                    // optimized, wrapped access over the top border.
+                    
+                    
+                    cint mask_y_off = rules.get_space_height() - YB;//mask.getNumRows() - (YE - rules.get_space_height());//rules.get_space_height() - YB + 1;    // row offset caused by prior loop
                     for (int y = 0; y < YE - rules.get_space_height(); ++y)
                     {
-                        cint Y = y*sim_ld;
-                        cint mask_y_off = mask.getNumRows() - (YE - rules.get_space_height());
-                        cint YB_ = (mask_y_off + y) * mask_ld - XB;
-                        #pragma omp simd aligned(sim_space, mask_space:64) reduction(+:f)
-                        #pragma vector aligned
-                        for (int x = XB; x < XE; ++x)
-                            f += sim_space[x + Y] * mask_space[x + YB_];
+                        cfloat const * s_row = sim_space + y*sim_ld + XB;         // space row + x_start
+                        cfloat const * m_row = mask_space + (y + mask_y_off) * mask_ld;   // mask row
+                        assert(!(long(s_row) % ALIGNMENT || long(m_row) % ALIGNMENT));
+                        #pragma omp simd aligned(s_row, m_row:64) reduction(+:f)
+                        for (int x = 0; x < XE-XB; ++x)
+                            f += s_row[x] * m_row[x];
                     }
                 }
             }
             else
             {
+                // both loops have the same offset & mask!
                 // special case 1. Ideally vectorized. Access over top border
+                cint mask_y_off = -YB;
                 for (int y = 0; y < YE; ++y)
                 {
                     cfloat const * s_row = sim_space + y*sim_ld + XB;         // space row + x_start
-                    cfloat const * m_row = mask_space + (y - YB) * mask_ld;   // mask row
+                    cfloat const * m_row = mask_space + (y + mask_y_off) * mask_ld;   // mask row
                     assert(!(long(s_row) % ALIGNMENT || long(m_row) % ALIGNMENT));
                     #pragma omp simd aligned(s_row, m_row:64) reduction(+:f)
                     for (int x = 0; x < XE-XB; ++x)
                         f += s_row[x] * m_row[x];
                 }
+
                 
-                // optimized, wrapped access over the bottom border.
+                cint mask_y_off2 = rules.get_space_height() + YB;
                 for (int y = rules.get_space_height() + YB; y < rules.get_space_height(); ++y)
                 {
-                    cint Y = y*sim_ld;
-                    cint mask_y_off = rules.get_space_height() + YB;
-                    cint YB_ = (y - mask_y_off) * mask_ld - XB;
-                    #pragma omp simd aligned(sim_space, mask_space:64) reduction(+:f)
-                    #pragma vector aligned
-                    for (int x = XB; x < XE; ++x)
-                        f += sim_space[x + Y] * mask_space[x + YB_];
+                    cfloat const * s_row = sim_space + y*sim_ld + XB;         // space row + x_start
+                    cfloat const * m_row = mask_space + (y - mask_y_off2) * mask_ld;   // mask row
+                    assert(!(long(s_row) % ALIGNMENT || long(m_row) % ALIGNMENT));
+                    #pragma omp simd aligned(s_row, m_row:64) reduction(+:f)
+                    for (int x = 0; x < XE-XB; ++x)
+                        f += s_row[x] * m_row[x];
                 }
             }
         }
@@ -438,7 +448,7 @@ float simulator::getFilling(cint at_x, cint at_y, const vector<vectorized_matrix
                 for (int x = XB; x < rules.get_space_width(); ++x)
                     f += sim_space[x + Y] * mask_space[x + YB_];
             }
-
+          
             /*
             //still not working ( '-') -> ( ._. )
             //cint mask_x_off = rules.get_space_width() - XB +1; // should be +1
@@ -469,8 +479,9 @@ float simulator::getFilling(cint at_x, cint at_y, const vector<vectorized_matrix
                     f += space_current->getValue(x, y) * mask.getValue(x + mask_x_off + off_new, y - YB);
                     //f += sim_space[x + Y] * mask_space[x + YB_];
             }
-             */
-
+            */
+            
+            
             cint mask_x_off = mask.getLd() - (XE - rules.get_space_width()) - 1;
             // semi-optimized, wrapped access over the right border
             for (int y = YB; y < YE; ++y)
@@ -536,6 +547,7 @@ float simulator::getFilling(cint at_x, cint at_y, const vector<vectorized_matrix
 
     return f / mask_sum; // normalize f
 }
+
 
 float simulator::getFilling_peeled(cint at_x, cint at_y, const vector<vectorized_matrix<float>> &masks, cint offset, cfloat mask_sum)
 {
@@ -709,6 +721,7 @@ float simulator::getFilling_peeled(cint at_x, cint at_y, const vector<vectorized
 
     return f / mask_sum; // normalize f
 }
+
 
 float simulator::getFilling_unoptimized(cint at_x, cint at_y, const vectorized_matrix<float> &mask, cfloat mask_sum)
 {
