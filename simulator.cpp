@@ -177,6 +177,8 @@ void simulator::simulate_step()
 
 void simulator::simulate_step(int x_start, int w)
 {
+    //cout << "Simulate from " << x_start << " to " << (x_start + w) << endl;
+    
 #pragma omp parallel for schedule(static)
     for (int x = x_start; x < x_start + w; ++x)
     {
@@ -405,13 +407,12 @@ void simulator::run_simulation_master()
     space->buffer_read_ptr()->raw_copy_to(buffer_space.data());
     MPI_Bcast(buffer_space.data(), rules.get_space_width() * rules.get_space_height(), MPI_FLOAT, 0, MPI_COMM_WORLD);
 
-    bool master_simulated = false;
-    bool space_complete = false;
+    int stage = 0;
 
     while (running)
     {
         // Simulate the master if it did not yet
-        if (!space_complete && !master_simulated)
+        if (stage == 0)
         {
             cout << "Master | Simulating" << endl;
             /**
@@ -420,16 +421,15 @@ void simulator::run_simulation_master()
              * We want the master to have a workload, too; so we give it the first data chunk (the width of the field divided by count of ranks)
              * 
              * If we only have one rank, the master will calculate all of them
-             */
+             */            
             simulate_step(get_mpi_chunk_index() * get_mpi_chunk_width(), get_mpi_chunk_width());
 
-            master_simulated = true;
+            stage = 1;
         }
-
-        if (!space_complete && master_simulated)
+        else if(stage == 1)
         {
             //Update the status of our connections
-            bool slaves_ready = master_simulated;
+            bool slaves_ready = true;
 
             slaves_ready &= border_left_connection_send.update() == mpi_connection<float>::states::IDLE;
             slaves_ready &= border_right_connection_send.update() == mpi_connection<float>::states::IDLE;
@@ -499,21 +499,19 @@ void simulator::run_simulation_master()
                     }
                 }
 
-                space_complete = true;
+                stage = 2;
             }
         }
-
-        //If space is completed we push it into the queue or just swap it
-        if (space_complete)
+        else if(stage == 2)
         {
             if (APP_PERFTEST)
             {
                 space->swap();
-                space_complete = false; //Next step
+                stage = 0;
             }
             else
             {
-                space_complete = !space->push(); //Next step if queue is not full
+                stage = space->push() ? 0 : stage; //Next step if queue is not full
             }
         }
     }
