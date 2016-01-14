@@ -421,7 +421,7 @@ void simulator::run_simulation_master()
              * 
              * If we only have one rank, the master will calculate all of them
              */
-            simulate_step(get_mpi_chunk_index(), get_mpi_chunk_width());
+            simulate_step(get_mpi_chunk_index() * get_mpi_chunk_width(), get_mpi_chunk_width());
 
             master_simulated = true;
         }
