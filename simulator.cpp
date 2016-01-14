@@ -302,8 +302,8 @@ void simulator::run_simulation_slave()
             if (spacetime != 0)
             {
                 cout << "Slave | Copy borders from connections ..." << endl;
-                space_current->raw_overwrite(border_left_connection_recieve.get_buffer()->data(), 0, get_mpi_chunk_border_width());
-                space_current->raw_overwrite(border_right_connection_recieve.get_buffer()->data(), get_mpi_chunk_border_width() + get_mpi_chunk_width(), get_mpi_chunk_border_width());
+                ////space_current->raw_overwrite(border_left_connection_recieve.get_buffer()->data(), 0, get_mpi_chunk_border_width());
+                ////space_current->raw_overwrite(border_right_connection_recieve.get_buffer()->data(), get_mpi_chunk_border_width() + get_mpi_chunk_width(), get_mpi_chunk_border_width());
 
                 border_left_connection_recieve.flush();
                 border_right_connection_recieve.flush();
@@ -320,7 +320,7 @@ void simulator::run_simulation_slave()
 
             cout << "Slave | Copy field to space connection" << endl;
             //Copy the complete field into the space buffer and the borders into their respective buffers
-            space_current->raw_copy_to(space_connection.get_buffer()->data(), get_mpi_chunk_border_width(), get_mpi_chunk_width());
+            ////space_current->raw_copy_to(space_connection.get_buffer()->data(), get_mpi_chunk_border_width(), get_mpi_chunk_width());
             space_connection.flush();
 
             if (left_rank != 0)
@@ -329,7 +329,7 @@ void simulator::run_simulation_slave()
                 /**
                  * We want the left border. It starts at chunk_border_width
                  */
-                space_current->raw_copy_to(border_left_connection_send.get_buffer()->data(), get_mpi_chunk_border_width(), get_mpi_chunk_border_width());
+                ////space_current->raw_copy_to(border_left_connection_send.get_buffer()->data(), get_mpi_chunk_border_width(), get_mpi_chunk_border_width());
                 border_left_connection_send.flush();
             }
             if (right_rank != 0)
@@ -338,7 +338,7 @@ void simulator::run_simulation_slave()
                 /**
                  * We want the right border. It starts at chunk_border_width + chunk_width - chunk_border_width = chunk_width
                  */
-                space_current->raw_copy_to(border_right_connection_send.get_buffer()->data(), get_mpi_chunk_width(), get_mpi_chunk_border_width());
+                ////space_current->raw_copy_to(border_right_connection_send.get_buffer()->data(), get_mpi_chunk_width(), get_mpi_chunk_border_width());
                 border_right_connection_send.flush();
             }
 
@@ -432,7 +432,7 @@ void simulator::run_simulation_master()
                 for (mpi_connection<float> & conn : space_connections)
                 {
                     int chunk_index = get_mpi_chunk_index(conn.get_rank_sender());
-                    space_current->raw_overwrite(conn.get_buffer()->data(), chunk_index * get_mpi_chunk_width(), get_mpi_chunk_width());
+                    ////space_current->raw_overwrite(conn.get_buffer()->data(), chunk_index * get_mpi_chunk_width(), get_mpi_chunk_width());
 
                     //Ask for new data
                     conn.flush();
@@ -459,7 +459,7 @@ void simulator::run_simulation_master()
                  */
                 int chunk_index = get_mpi_chunk_index();
                 int border_start = chunk_index * get_mpi_chunk_border_width();
-                space_next->raw_copy_to(border_left_connection_send.get_buffer()->data(), border_start, get_mpi_chunk_border_width());
+                ////space_next->raw_copy_to(border_left_connection_send.get_buffer()->data(), border_start, get_mpi_chunk_border_width());
                 border_left_connection_send.flush();
             }
             if (right_rank != 0)
@@ -470,7 +470,7 @@ void simulator::run_simulation_master()
                  */
                 int chunk_index = get_mpi_chunk_index();
                 int border_start = (chunk_index + 1) * get_mpi_chunk_border_width() - get_mpi_chunk_border_width();
-                space_next->raw_copy_to(border_right_connection_send.get_buffer()->data(), border_start, get_mpi_chunk_border_width());
+                ////space_next->raw_copy_to(border_right_connection_send.get_buffer()->data(), border_start, get_mpi_chunk_border_width());
                 border_right_connection_send.flush();
             }
 
