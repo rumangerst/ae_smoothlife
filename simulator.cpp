@@ -426,7 +426,7 @@ void simulator::run_simulation_master()
             master_simulated = true;
         }
 
-        if (!space_complete)
+        if (!space_complete && master_simulated)
         {
             //Update the status of our connections
             bool slaves_ready = master_simulated;
@@ -513,7 +513,7 @@ void simulator::run_simulation_master()
             }
             else
             {
-                space_complete = space->push(); //Next step if queue is not full
+                space_complete = !space->push(); //Next step if queue is not full
             }
         }
     }
