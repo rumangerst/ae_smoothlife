@@ -65,7 +65,7 @@ public:
     {       
         if(current_state != states::IDLE)
         {
-            cerr << "mpi_variable_buffer_connection: Buffer can only be returned in IDLE state!" << endl;
+            cerr << "mpi_buffer_connection: Buffer can only be returned in IDLE state!" << " rank: " << mpi_rank() << endl;
             exit(EXIT_FAILURE);
         }
     
@@ -81,7 +81,7 @@ public:
         {
             if(current_state != states::IDLE)
             {
-                cerr << "mpi_variable_buffer_connection: flush() called on sender that is not IDLE" << endl;
+                cerr << "mpi_buffer_connection: flush() called on sender that is not IDLE"  << " rank: " << mpi_rank() << endl;
                 exit(EXIT_FAILURE);
             }
             
@@ -102,7 +102,7 @@ public:
         {
             if(current_state != states::IDLE)
             {
-                cerr << "mpi_variable_buffer_connection: flush() called on reciever that is not IDLE" << endl;
+                cerr << "mpi_connection: flush() called on reciever that is not IDLE"  << " rank: " << mpi_rank() << endl;
                 exit(EXIT_FAILURE);
             }
             
