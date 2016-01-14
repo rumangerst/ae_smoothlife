@@ -402,8 +402,11 @@ void simulator::run_simulation_master()
     while (running)
     {
         bool slaves_ready = true;
-        bool queue_ready = APP_PERFTEST || spacetime == 0 || space->push(); //Note: Sideeffect of space->push()!!!
+        bool queue_ready = APP_PERFTEST || spacetime == 0;
 
+        slaves_ready &= border_left_connection_send.update() == mpi_connection<float>::states::IDLE;
+        slaves_ready &= border_right_connection_send.update() == mpi_connection<float>::states::IDLE;
+        
         for (mpi_connection<float> & conn : space_connections)
         {
             slaves_ready &= conn.update() == mpi_connection<float>::states::IDLE;
@@ -413,11 +416,11 @@ void simulator::run_simulation_master()
          * Simulate only the first time or when the buffer_queue can enqueue the current read buffer.
          * If we only test performance never push into queue and always simulate.
          */
-        if (slaves_ready & queue_ready)
+        if (slaves_ready && (queue_ready || space->push())) //Caution!!! Side effects!!!
         {
             //Integrate data from slaves if not first time
             if (spacetime != 0)
-            {
+            {                
                 for (mpi_connection<float> & conn : space_connections)
                 {
                     int chunk_index = get_mpi_chunk_index(conn.get_rank_sender());
