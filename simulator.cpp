@@ -499,7 +499,7 @@ void simulator::run_simulation_master()
                     }
                 }
 
-                space_completed = true;
+                space_complete = true;
             }
         }
 
