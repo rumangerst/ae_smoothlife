@@ -304,9 +304,11 @@ void simulator::run_simulation_slave()
             if (spacetime != 0)
             {
                 cout << "Slave | Copy borders from connections ..." << endl;
-                space_current->raw_overwrite(border_left_connection_recieve.get_buffer()->data(), 0, get_mpi_chunk_border_width());
-                space_current->raw_overwrite(border_right_connection_recieve.get_buffer()->data(), get_mpi_chunk_border_width() + get_mpi_chunk_width(), get_mpi_chunk_border_width());
-
+                //space_current->raw_overwrite(border_left_connection_recieve.get_buffer()->data(), 0, get_mpi_chunk_border_width());
+                //space_current->raw_overwrite(border_right_connection_recieve.get_buffer()->data(), get_mpi_chunk_border_width() + get_mpi_chunk_width(), get_mpi_chunk_border_width());
+                space_current->raw_overwrite(border_right_connection_recieve.get_buffer()->data(), 0, get_mpi_chunk_border_width());
+                space_current->raw_overwrite(border_left_connection_recieve.get_buffer()->data(), get_mpi_chunk_border_width() + get_mpi_chunk_width(), get_mpi_chunk_border_width());
+                
                 border_left_connection_recieve.flush();
                 border_right_connection_recieve.flush();
             }
