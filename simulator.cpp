@@ -379,7 +379,7 @@ void simulator::run_simulation_master()
                                     i,
                                     0,
                                     APP_MPI_TAG_SPACE,
-                                    rules.get_space_height() * get_mpi_chunk_border_width(),
+                                    rules.get_space_height() * get_mpi_chunk_width(),
                                     MPI_FLOAT));
     }
 
