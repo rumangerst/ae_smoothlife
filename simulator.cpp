@@ -183,24 +183,18 @@ void simulator::simulate_step(int x_start, int w)
             float m;        
 
             // get the alignment offset caused during iteration of space
-            cint off = ((x - offset_from_mask_center) >= 0) ?
+            // NOTE: for left/right border, we need two different offsets
+            int off = ((x - offset_from_mask_center) >= 0) ?
                     (x - offset_from_mask_center) % CACHELINE_FLOATS :
-                    CACHELINE_FLOATS - ((offset_from_mask_center - x)); // looks ugly, right? Only important for right borders
+                    CACHELINE_FLOATS - ((offset_from_mask_center - x) % CACHELINE_FLOATS); // we calc this new inside the function in this case
+            
             assert(off >= 0 && off < CACHELINE_FLOATS);
             //(x - offset_from_mask_center) >= 0
-            //(x + outer_masks[off].getRightOffset() < this->space_current->getNumCols()))
-            if (optimize && (x - offset_from_mask_center) >= 0 && (x + outer_masks[off].getRightOffset() < this->space_current->getNumCols()))
+            //(x + outer_masks[off].getRightOffset() < this->space_current->getNumCols())
+            if (optimize)
             {
-                if (USE_PEELED)
-                {
-                    n = getFilling_peeled(x, y, inner_masks, off, inner_mask_sum); // filling of inner circle
-                    m = getFilling_peeled(x, y, outer_masks, off, outer_mask_sum); // filling of outer ring
-                }
-                else
-                {
-                    n = getFilling(x, y, inner_masks, off, inner_mask_sum); // filling of inner circle
-                    m = getFilling(x, y, outer_masks, off, outer_mask_sum); // filling of outer ring
-                }
+                n = getFilling(x, y, inner_masks, off, inner_mask_sum); // filling of inner circle
+                m = getFilling(x, y, outer_masks, off, outer_mask_sum); // filling of outer ring
             }
             else
             {
@@ -357,8 +351,7 @@ float simulator::getFilling(cint at_x, cint at_y, const vector<vectorized_matrix
     assert(long(sim_space) % ALIGNMENT == 0);
     assert(long(mask_space) % ALIGNMENT == 0);
     //cout << "at_x: " << at_x << "  at_y: " << at_y << "  XB: " << XB << "  XE: " << XE << endl;
-    assert((XB * sizeof (float)) % ALIGNMENT == 0 && (XE * sizeof (float)) % ALIGNMENT == 0);
-
+    
     //NOTE: if XB or YB is negative, we do not need to check XE or YE - they have to be within the field boundaries
     float f = 0;
     if (XB >= 0)
@@ -370,7 +363,8 @@ float simulator::getFilling(cint at_x, cint at_y, const vector<vectorized_matrix
             {
                 if (YE < rules.get_space_height())
                 {
-                    // Ideal case. Access within the space without crossing edges. Tested. Fully vectorized.
+                    assert((XB * sizeof (float)) % ALIGNMENT == 0 && (XE * sizeof (float)) % ALIGNMENT == 0);
+                    // Ideal case. Access within the space without crossing edges. Tested.
                     for (int y = YB; y < YE; ++y)
                     {
                         cfloat const * s_row = sim_space + y*sim_ld + XB;         // space row + x_start
@@ -383,8 +377,9 @@ float simulator::getFilling(cint at_x, cint at_y, const vector<vectorized_matrix
                 }
                 else
                 {
+                    assert((XB * sizeof (float)) % ALIGNMENT == 0 && (XE * sizeof (float)) % ALIGNMENT == 0);
                     // both loops have the same offset & mask!
-                    // special case 2. Ideally vectorized. Access over bottom border
+                    // special case 2. Ideally vectorized. Access over bottom border. Tested
                     for (int y = YB; y < rules.get_space_height(); ++y)
                     {
                         cfloat const * s_row = sim_space + y*sim_ld + XB;         // space row + x_start
@@ -396,7 +391,7 @@ float simulator::getFilling(cint at_x, cint at_y, const vector<vectorized_matrix
                     }
                     
                     
-                    cint mask_y_off = rules.get_space_height() - YB;//mask.getNumRows() - (YE - rules.get_space_height());//rules.get_space_height() - YB + 1;    // row offset caused by prior loop
+                    cint mask_y_off = rules.get_space_height() - YB;    // row offset caused by prior loop
                     for (int y = 0; y < YE - rules.get_space_height(); ++y)
                     {
                         cfloat const * s_row = sim_space + y*sim_ld + XB;         // space row + x_start
@@ -410,8 +405,9 @@ float simulator::getFilling(cint at_x, cint at_y, const vector<vectorized_matrix
             }
             else
             {
+                assert((XB * sizeof (float)) % ALIGNMENT == 0 && (XE * sizeof (float)) % ALIGNMENT == 0);
                 // both loops have the same offset & mask!
-                // special case 1. Ideally vectorized. Access over top border
+                // special case 1. Ideally vectorized. Access over top border. Tested
                 cint mask_y_off = -YB;
                 for (int y = 0; y < YE; ++y)
                 {
@@ -438,60 +434,21 @@ float simulator::getFilling(cint at_x, cint at_y, const vector<vectorized_matrix
         }
         else if ((YB >= 0) && (YE < rules.get_space_height()))
         {
-            // special case 4. Access of right border. Deactivated
+            // special case 4. Access of right border. Tested
             for (int y = YB; y < YE; ++y)
             {
-                cint Y = y*sim_ld;
-                cint YB_ = (y - YB) * mask_ld - XB;
-                #pragma omp simd aligned(sim_space, mask_space:64) reduction(+:f)
-                #pragma vector aligned
-                for (int x = XB; x < rules.get_space_width(); ++x)
-                    f += sim_space[x + Y] * mask_space[x + YB_];
+                for (int x = 0; x < rules.get_space_width() - XB; ++x)
+                    f += sim_space[x + XB + y*sim_ld] * mask_space[x + (y - YB) * mask_ld];
             }
-          
-            /*
-            //still not working ( '-') -> ( ._. )
-            //cint mask_x_off = rules.get_space_width() - XB +1; // should be +1
-            cint mask_x_off = mask.getLd() - (XE - rules.get_space_width()) - 1 - offset; // mask_x based on current mask, but without left offset
-            cint off_new = CACHELINE_FLOATS - (mask_x_off % CACHELINE_FLOATS);            // calc new offset to start from index 0
-            if !(off_new >= 0 && off_new < CACHELINE_FLOATS)
-            assert(off_new >= 0 && off_new < CACHELINE_FLOATS);
-            assert(off_new == (ALIGNMENT - (mask_x_off*sizeof(float) % ALIGNMENT))/sizeof(float));  // garantue correct math
-            //cout << "m_off: " << mask_x_off << " off: " << offset << "  off_new: " << off_new << endl;
-            vectorized_matrix<float> const &mask = masks[off_new];  // overwrite old mask temporarily
-            cint XE = mask.getRightOffset();                 // calculate new end (can be different!)
-            //cout << "off: " << offset << " off_new: " << off_new << " diff: " << off_new - offset << endl;       
-            //cout << "mxoff: " << mask_x_off << " term: " << mask_x_off + off_new + XE << " ld: " << mask.getLd() << endl;
-            //cout << "XE: " << XE << endl;
-            //mask.print_info();
-            if(XE > mask.getLd()) {
-                mask.print_info();
-                mask.print_to_console();
-            }
-            assert(XE <= mask.getLd());
-            assert(long(&mask.getValues()[mask_x_off+off_new]) % ALIGNMENT == 0);  
-
-            // optimized, wrapped access over the right border
-            for (int y = YB; y < YE; ++y) {
-                cint Y = y*sim_ld;
-                //cint YB_ = mask_x_off + (y - YB) * mask_ld;
-                for (int x = 0; x < (XE - rules.get_space_width()); ++x)
-                    f += space_current->getValue(x, y) * mask.getValue(x + mask_x_off + off_new, y - YB);
-                    //f += sim_space[x + Y] * mask_space[x + YB_];
-            }
-            */
             
             
-            cint mask_x_off = mask.getLd() - (XE - rules.get_space_width()) - 1;
+            //cint mask_x_off = mask.getLd() - (XE - rules.get_space_width()) - 1;
+            cint mask_x_off = rules.get_space_width() - XB;
             // semi-optimized, wrapped access over the right border
             for (int y = YB; y < YE; ++y)
             {
-                cint Y = y*sim_ld;
-                cint YB_ = mask_x_off + (y - YB) * mask_ld;
-                __assume_aligned(sim_space, 64);
-                __assume_aligned(mask_space, 64);
-                for (int x = 0; x < (XE - rules.get_space_width()); ++x)
-                    f += sim_space[x + Y] * mask_space[x + YB_];
+                for (int x = 0; x < XE-rules.get_space_width(); ++x)
+                    f += sim_space[x + y*sim_ld] * mask_space[x + mask_x_off + (y - YB) * mask_ld];
             }
         }
         else
@@ -508,30 +465,42 @@ float simulator::getFilling(cint at_x, cint at_y, const vector<vectorized_matrix
     }
     else if ((YB >= 0) && (YE < rules.get_space_height()))
     {
-        // special case 3. Access over left border
+        // special case 3. Access over left border. Tested
+        cint mask_x_off = -XB;
         for (int y = YB; y < YE; ++y)
         {
             cint Y = y*sim_ld;
-            cint YB_ = (y - YB) * mask_ld - XB;
-            __assume_aligned(sim_space, 64);
-            __assume_aligned(mask_space, 64);
+            cint YB_ = mask_x_off + (y - YB) * mask_ld;
             for (int x = 0; x < XE; ++x)
                 f += sim_space[x + Y] * mask_space[x + YB_];
-            //f += space_current->getValue(x, y) * mask.getValue(x - XB, y - YB);
         }
-
-        // NOTE: XB is negative here.
+        
+        // wrapped part. we are on the right now
         for (int y = YB; y < YE; ++y)
         {
-            cint Y = y*sim_ld;
-            cint XB_ = rules.get_space_width() + XB;
-            cint YB_ = (y - YB) * mask_ld - XB_;
-            __assume_aligned(sim_space, 64);
-            __assume_aligned(mask_space, 64);
-            for (int x = rules.get_space_width() + XB; x < rules.get_space_width(); ++x)
+            cint Y = y*sim_ld + rules.get_space_width() + XB;
+            cint YB_ = (y - YB) * mask_ld;
+            for (int x = 0; x < -XB; ++x)
                 f += sim_space[x + Y] * mask_space[x + YB_];
-            //f += space_current->getValue(x, y) * mask.getValue(x - XB_, y - YB);
         }
+        
+        /*
+        // special case 3. Access over left border. Tested
+        cint mask_x_off = -XB;
+        for (int y = YB; y < YE; ++y)
+        {
+            for (int x = 0; x < XE; ++x)
+                f += sim_space[x + y*sim_ld] * mask_space[x + mask_x_off + (y - YB) * mask_ld];
+        }
+
+        // wrapped part. we are on the right now
+        cint XB_new = rules.get_space_width() + XB;
+        for (int y = YB; y < YE; ++y)
+        {
+            for (int x = XB_new; x < rules.get_space_width(); ++x)
+                f += sim_space[x + y*sim_ld] * mask_space[x - XB_new + (y - YB) * mask_ld];
+        }
+        */
     }
     else
     {
