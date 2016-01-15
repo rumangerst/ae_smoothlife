@@ -184,6 +184,11 @@ public:
     {
         return M[matrix_index_wrapped(x, y, ld, rows, ld)];
     }
+    
+    inline T* getRow_ptr(int y)
+    {
+        return &M.data()[matrix_index(0, y, ld)];
+    }
 
     inline const T* getRow_ptr(int y) const
     {
