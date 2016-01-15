@@ -51,6 +51,19 @@ public:
         buffer_read = 0; //Reading happens at element 0
 
         update_buffer_pointers();
+    }    
+    
+    /**
+     * @brief swaps read and write buffer. Needs queue max size of 0 (disable queue);
+     */
+    void swap()
+    {
+        if(queue_max_size != 0)
+        {
+            cerr << "cannot call swap() on matrix_buffer_queue with active queue! Set queue max size to 0!" << endl;
+            exit(EXIT_FAILURE);
+        }
+        std::swap(write_buffer, read_buffer);
     }
     
     /**
@@ -76,14 +89,16 @@ public:
      * @param dst
      * @return 
      */
-    bool pop(float * dst)
+    bool pop(float * dst, int x_start, int w)
     {
         if (queue_size == 0)
         {
             return false;
         }
+        
+        buffer[queue_start].raw_copy_to(dst, x_start, w);
 
-        int w = buffer[0].getNumCols();
+        /*int w = buffer[0].getNumCols();
         int h = buffer[0].getNumRows();
 
         for (int y = 0; y < h; ++y)
@@ -92,13 +107,23 @@ public:
             {
                 dst[x + y * w] = buffer[queue_start].getValue(x, y);
             }
-        }
+        }*/
 
         //shrink the queue by 1
         queue_start = wrap_index(queue_start + 1);
         queue_size = queue_size - 1;
 
         return true;
+    }
+    
+    /**
+     * @brief Pop first item of queue into raw float array. Data is row major with ld = columns
+     * @param dst
+     * @return 
+     */
+    bool pop(float * dst)
+    {
+        return pop(dst, 0, buffer[queue_start].getNumCols());
     }
 
     /**

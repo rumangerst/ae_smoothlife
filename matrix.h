@@ -382,6 +382,80 @@ public:
         }
 
     }
+    
+    /**
+     * @brief Copies a horizontal slice of this matrix into ptr.
+     * @param data
+     * @author Ruman
+     */
+    void raw_copy_to(T * ptr, int x_start, int w)
+    {
+        for(int y = 0; y < getNumRows();++y)
+        {
+            for(int x = x_start; x < x_start + w;++x)
+            {
+                ptr[matrix_index(x - x_start,y,w)] = getValue(x,y);
+            }
+        }
+    }
+    
+    /**
+     * @brief Overwrites a horizontal slice of this matrix with a horizontal slice of a raw matrix with same row count.
+     * @param ptr the source
+     * @param src_x_start slice start x coordinate (column) in source
+     * @param dst_x_start slice start x coordinate (column) in destination (this matrix)
+     * @param w slice width
+     * @param src_column column count of source
+     */
+    void raw_overwrite(T * ptr, int src_x_start, int dst_x_start, int w, int src_columns)
+    {
+        for(int y = 0; y < getNumRows(); ++y)
+        {
+            T * src_row = &ptr[y * src_columns];
+            T * dst_row = getRow_ptr(y);
+            
+            for(int x = 0; x < w; ++x)
+            {
+                dst_row[x + dst_x_start] = src_row[x + src_x_start];
+            }
+        }
+    }
+    
+    /**
+     * @brief Overwrites horizontal slice of this matrix with a raw matrix.
+     * @param ptr
+     * @author Ruman
+     */
+    void raw_overwrite(T * ptr, int x_start, int w)
+    {
+        raw_overwrite(ptr, 0, x_start, w, w);
+        
+        /*for(int y = 0; y < getNumRows();++y)
+        {
+            for(int x = x_start; x < x_start + w;++x)
+            {
+                setValue(ptr[matrix_index(x - x_start,y,w)],x,y);
+            }
+        }*/
+    }
+    
+    /**
+     * @brief Writes all data from this matrix into a raw matrix
+     * @param ptr
+     */
+    void raw_copy_to(T * ptr)
+    {
+        raw_copy_to(ptr, 0, getNumCols());
+    }
+    
+    /**
+     * @brief Overwrites all data in this matrix with a raw matrix.
+     * @param ptr
+     */
+    void raw_overwrite(T * ptr)
+    {
+        raw_overwrite(ptr, 0, getNumCols());
+    }
 };
 
 template <typename T>

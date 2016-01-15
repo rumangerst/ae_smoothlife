@@ -1,9 +1,4 @@
 #pragma once
-#define MODE_SIMULATE 0
-#define MODE_TEST_INITIALIZE 1
-#define MODE_TEST_MASKS 2
-#define MODE_TEST_COLORS 3
-#define MODE_TEST_STATE_FUNCTION 4
 
 #include <iostream>
 #include <math.h>
@@ -19,11 +14,10 @@
 #include "ruleset.h"
 #include "aligned_vector.h"
 #include "communication.h"
-
+#include <unistd.h>
 
 using namespace std;
 
-#define SIMULATOR_MODE MODE_SIMULATE //Set the mode of the simulator
 #define SIMULATOR_INITIALIZATION_FUNCTION space_set_splat //The function used for initialization
 
 #define SPACE_QUEUE_MAX_SIZE 32 //the queue size used by the program
@@ -111,10 +105,35 @@ public:
 private:
     
     /**
+     * @brief Returns the chunk that is calculated by rank of
+     */
+    int get_mpi_chunk_index(int of)
+    {
+        return (of + 1) % mpi_comm_size();
+    }
+    
+    /**
+     * @brief Returns the chunk that is calculated by this rank
+     */
+    int get_mpi_chunk_index()
+    {
+        return get_mpi_chunk_index(mpi_rank());
+    }
+    
+    /**
+     * @brief Returns the size of the border of a slave simulator chunk
+     * @return 
+     */
+    int get_mpi_chunk_border_width()
+    {
+        return matrix_calc_ld_with_padding(sizeof(float), rules.get_ra() + 1, CACHELINE_SIZE);
+    }
+    
+    /**
      * @brief Returns how much width of the field calculation a rank gets. Exits program if division cannot be done.
      * @return 
      */
-    int get_space_mpi_chunk_width()
+    int get_mpi_chunk_width()
     {
         int ranks = mpi_comm_size();
         
