@@ -1,6 +1,7 @@
 #include "simulator.h"
 #include "aligned_vector.h"
 #include "mpi_async_connection.h"
+#include "mpi_dual_connection.h"
 #include <assert.h>
 #include <mpi.h>
 #include <omp.h>
