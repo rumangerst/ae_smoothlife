@@ -493,7 +493,6 @@ void simulator::run_simulation_master()
             else
             {
                 stage = space->push() ? 0 : stage; //Next step if queue is not full
-                sleep(3);
             }
         }
     }
