@@ -18,7 +18,7 @@ public:
         mpi_tag(_tag),
         datatype(_datatype),
         buffer_send(initial),
-        buffer_reciever(initial),
+        buffer_recieve(initial),
         is_sender(_is_sender),
         is_reciever(_is_reciever)
     
@@ -66,11 +66,11 @@ public:
     {
         if(is_sender && is_reciever)
         {
-			MPI_Sendrecv(send_buffer.data(),
-				send_buffer.size(),
+			MPI_Sendrecv(buffer_send.data(),
+				buffer_send.size(),
 				datatype,
-				recieve_buffer.data(),
-				recieve_buffer.size(),
+				buffer_recieve.data(),
+				buffer_recieve.size(),
 				datatype,
 				other_rank,
 				mpi_tag,
@@ -79,8 +79,8 @@ public:
 		}
 		else if(is_sender)
 		{
-			MPI_Send(send_buffer.data(),
-				send_buffer.size(),
+			MPI_Send(buffer_send.data(),
+				buffer_send.size(),
 				datatype,
 				other_rank,
 				mpi_tag,
@@ -88,7 +88,7 @@ public:
 		}
 		else if(is_reciever)
 		{
-			MPI_Recv(recieve_buffer.data(),
+			MPI_Recv(buffer_recieve.data(),
 				datatype,
 				other_rank,
 				mpi_tag,
