@@ -110,62 +110,7 @@ void simulator::initialize()
 
     vectorized_matrix<float> * space = new vectorized_matrix<float>(rules.get_space_width(), rules.get_space_height());
 
-    if (SIMULATOR_MODE == MODE_SIMULATE || SIMULATOR_MODE == MODE_TEST_INITIALIZE)
-    {
-        SIMULATOR_INITIALIZATION_FUNCTION(space);
-    }
-    else if (SIMULATOR_MODE == MODE_TEST_MASKS)
-    {
-        initiate_masks();
-        assert(!inner_masks.empty() && !outer_masks.empty());
-
-        //Print the two masks
-        for (int x = 0; x < inner_masks[0].getNumCols(); ++x)
-        {
-            for (int y = 0; y < inner_masks[0].getNumRows(); ++y)
-            {
-                space->setValue(inner_masks[0].getValue(x, y), x, y);
-            }
-        }
-
-        for (int x = 0; x < outer_masks[0].getNumCols(); ++x)
-        {
-            for (int y = 0; y < outer_masks[0].getNumRows(); ++y)
-            {
-                space->setValue(outer_masks[0].getValue(x, y), x + inner_masks[0].getNumCols() + 10, y + inner_masks[0].getNumRows() + 10);
-            }
-        }
-    }
-
-    else if (SIMULATOR_MODE == MODE_TEST_COLORS)
-    {
-        //Test the colors
-        for (int x = 0; x < rules.get_space_width(); ++x)
-        {
-            for (int y = 0; y < rules.get_space_height(); ++y)
-            {
-                float m = (double) y / rules.get_space_width();
-                float n = (double) x / rules.get_space_height();
-
-                space->setValue((n + m) / 2.0, x, y);
-            }
-        }
-    }
-
-    else if (SIMULATOR_MODE == MODE_TEST_STATE_FUNCTION)
-    {
-        //Test to print s(n,m)
-        for (int x = 0; x < rules.get_space_width(); ++x)
-        {
-            for (int y = 0; y < rules.get_space_height(); ++y)
-            {
-                float m = (double) y / rules.get_space_width();
-                float n = (double) x / rules.get_space_height();
-
-                space->setValue(discrete_state_func_1(n, m), x, y);
-            }
-        }
-    }
+    SIMULATOR_INITIALIZATION_FUNCTION(space);
 
     // Give space to main initialization function
     initialize(*space);
@@ -179,7 +124,7 @@ void simulator::simulate_step()
 void simulator::simulate_step(int x_start, int w)
 {
     //cout << "Simulate from " << x_start << " to " << (x_start + w) << endl;
-    
+
 #pragma omp parallel for schedule(static)
     for (int x = x_start; x < x_start + w; ++x)
     {
@@ -216,13 +161,13 @@ void simulator::simulate_step(int x_start, int w)
             //Calculate the new state based on fillings n and m
             //Smooth state function must be clamped to [0,1] (this is also done by author's implementation!)
             space_next->setValue(rules.get_is_discrete() ? discrete_state_func_1(n, m) : fmax(0, fmin(1, next_step_as_euler(x, y, n, m))), x, y);
-            
-            
+
+
             //space_next->setValue(space_current->getValue(x,y),x,y);
 
         }
     }
-    
+
     //cerr << "Disabled calc" << endl;
 
     ++spacetime;
@@ -256,7 +201,7 @@ void simulator::run_simulation_slave()
     int left_rank = matrix_index_wrapped(mpi_rank() - 1, 1, mpi_comm_size(), 1, mpi_comm_size());
     int right_rank = matrix_index_wrapped(mpi_rank() + 1, 1, mpi_comm_size(), 1, mpi_comm_size());
 
-    
+
     mpi_async_connection<float> border_left_connection_send = mpi_async_connection<float>(
             mpi_rank(),
             left_rank,
@@ -269,7 +214,7 @@ void simulator::run_simulation_slave()
             APP_MPI_TAG_BORDER_RIGHT,
             rules.get_space_height() * get_mpi_chunk_border_width(),
             MPI_FLOAT); //Sends the right border to the right rank -> Will be its left border
-            
+
     mpi_async_connection<float> border_right_connection_recieve = mpi_async_connection<float>(
             right_rank,
             mpi_rank(),
@@ -282,32 +227,33 @@ void simulator::run_simulation_slave()
             APP_MPI_TAG_BORDER_LEFT,
             rules.get_space_height() * get_mpi_chunk_border_width(),
             MPI_FLOAT); //Recieves the left border of this rank from the left rank
-    
+
 
     // Use broadcast to obtain the initial space from master
     vector<float> buffer_space = vector<float>(rules.get_space_width() * rules.get_space_height());
     MPI_Bcast(buffer_space.data(), rules.get_space_width() * rules.get_space_height(), MPI_FLOAT, 0, MPI_COMM_WORLD);
 
     space_current->raw_overwrite(buffer_space.data(),
-        get_mpi_chunk_index() * get_mpi_chunk_width(),
-        get_mpi_chunk_border_width(),
-        get_mpi_chunk_width(),
-        rules.get_space_width()); //Overwrite main space
+                                 get_mpi_chunk_index() * get_mpi_chunk_width(),
+                                 get_mpi_chunk_border_width(),
+                                 get_mpi_chunk_width(),
+                                 rules.get_space_width()); //Overwrite main space
+
+    space_current->raw_overwrite(buffer_space.data(),
+                                 get_mpi_chunk_index(left_rank) * get_mpi_chunk_width() + get_mpi_chunk_width() - get_mpi_chunk_border_width(),
+                                 0,
+                                 get_mpi_chunk_border_width(),
+                                 rules.get_space_width()); //Overwrite left border with right border of left rank
+
+    space_current->raw_overwrite(buffer_space.data(),
+                                 get_mpi_chunk_index(right_rank) * get_mpi_chunk_width(),
+                                 get_mpi_chunk_border_width() + get_mpi_chunk_width(),
+                                 get_mpi_chunk_border_width(),
+                                 rules.get_space_width()); //Overwrite right border with left border of right rank
+
+        running = true;
+    communication_connection.flush();    
     
-    space_current->raw_overwrite(buffer_space.data(),
-        get_mpi_chunk_index(left_rank) * get_mpi_chunk_width() + get_mpi_chunk_width() - get_mpi_chunk_border_width(),
-        0,
-        get_mpi_chunk_border_width(),
-        rules.get_space_width()); //Overwrite left border with right border of left rank
-
-    space_current->raw_overwrite(buffer_space.data(),
-        get_mpi_chunk_index(right_rank) * get_mpi_chunk_width(),
-        get_mpi_chunk_border_width() + get_mpi_chunk_width(),
-        get_mpi_chunk_border_width(),
-        rules.get_space_width()); //Overwrite right border with left border of right rank
-
-    running = true;
-    communication_connection.flush();
 
     while (running)
     {
@@ -320,20 +266,26 @@ void simulator::run_simulation_slave()
             communication_connection.flush();
         }
 
+        /**
+         * Wait until all connections are ready.
+         * We do not use MPI_Sendrev because of:
+         * 
+         * - We cannot cancel MPI_Sendrecv
+         * - It did nothing to performance
+         */
         if (space_connection.update() == mpi_async_connection<float>::states::IDLE
                 & border_left_connection_recieve.update() == mpi_async_connection<float>::states::IDLE
                 & border_right_connection_recieve.update() == mpi_async_connection<float>::states::IDLE
                 & border_left_connection_send.update() == mpi_async_connection<float>::states::IDLE
                 & border_right_connection_send.update() == mpi_async_connection<float>::states::IDLE)
         {
-            cout << "slave: " << spacetime << endl;
-            
+
             //Unless first time, copy the borders
             if (spacetime != 0)
-            {               
+            {
                 space_current->raw_overwrite(border_left_connection_recieve.get_buffer()->data(), 0, get_mpi_chunk_border_width()); //Overwrite left border with border provided by left rank
                 space_current->raw_overwrite(border_right_connection_recieve.get_buffer()->data(), get_mpi_chunk_border_width() + get_mpi_chunk_width(), get_mpi_chunk_border_width()); //Overwrite right border with border provided by right rank
-                
+
                 border_left_connection_recieve.flush();
                 border_right_connection_recieve.flush();
             }
@@ -344,10 +296,10 @@ void simulator::run_simulation_slave()
              * to the chunk area. This border area has a size % CACHELINE_SIZE
              */
             simulate_step(get_mpi_chunk_border_width(), get_mpi_chunk_width());
-            
+
             //Copy the complete field into the space buffer and the borders into their respective buffers
-            space_next->raw_copy_to(space_connection.get_buffer()->data(), get_mpi_chunk_border_width(), get_mpi_chunk_width());   
-            
+            space_next->raw_copy_to(space_connection.get_buffer()->data(), get_mpi_chunk_border_width(), get_mpi_chunk_width());
+
 
             if (left_rank != 0)
             {
@@ -365,7 +317,7 @@ void simulator::run_simulation_slave()
                 space_next->raw_copy_to(border_right_connection_send.get_buffer()->data(), get_mpi_chunk_width(), get_mpi_chunk_border_width());
                 border_right_connection_send.flush();
             }
-            
+
             space_connection.flush();
             space->swap(); //The queue is disabled, use swap which yields greater performance
 
@@ -432,27 +384,32 @@ void simulator::run_simulation_master()
     space->buffer_read_ptr()->raw_copy_to(buffer_space.data());
     MPI_Bcast(buffer_space.data(), rules.get_space_width() * rules.get_space_height(), MPI_FLOAT, 0, MPI_COMM_WORLD);
 
+    /**
+     * The master simulator has different stages:
+     * stage 0: Idle. We can simulate 1 time step further.
+     * stage 1: Sync phase. Assemble the final space from slave simulators. Then send borders to them
+     * stage 2: Queue phase. Try to enqueue the newly calculated space. The go back to stage 0
+     */
     int stage = 0;
+    
 
     while (running)
     {
         if (stage == 0)
         {
-            cout << "master: " << spacetime << endl;
-            
             /**
              * The master simulator is special in comparison to the slaves. As the master holds the complete field, it can 
              * access all data without copying/synching.
              * We want the master to have a workload, too; so we give it the first data chunk (the width of the field divided by count of ranks)
              * 
              * If we only have one rank, the master will calculate all of them
-             */            
-            simulate_step(get_mpi_chunk_index() * get_mpi_chunk_width(), get_mpi_chunk_width());            
-         
+             */
+            simulate_step(get_mpi_chunk_index() * get_mpi_chunk_width(), get_mpi_chunk_width());
+
 
             stage = 1;
         }
-        else if(stage == 1)
+        else if (stage == 1)
         {
             //Update the status of our connections
             bool slaves_ready = true;
@@ -473,19 +430,15 @@ void simulator::run_simulation_master()
                 //Integrate data from slaves if not first time
                 if (spacetime != 0)
                 {
-                    //cout << "Master | Getting data from slaves" << endl;
-
+                    // There is no nice way to integrate this loop into the conn.update() loop :(
                     for (mpi_async_connection<float> & conn : space_connections)
                     {
                         int chunk_index = get_mpi_chunk_index(conn.get_rank_sender());
-                        
                         space_next->raw_overwrite(conn.get_buffer()->data(), chunk_index * get_mpi_chunk_width(), get_mpi_chunk_width());
 
-                        //Ask for new data
                         conn.flush();
                     }
-                }               
-              
+                }
 
                 //Send the borders to the ranks that need them
                 //Use space_next!!! We want to send the result of the calculation!
@@ -497,7 +450,7 @@ void simulator::run_simulation_master()
                     int chunk_index = get_mpi_chunk_index();
                     int border_start = chunk_index * get_mpi_chunk_width();
                     space_next->raw_copy_to(border_left_connection_send.get_buffer()->data(), border_start, get_mpi_chunk_border_width());
-                                       
+
                     border_left_connection_send.flush();
                 }
                 if (right_rank != 0)
@@ -507,13 +460,8 @@ void simulator::run_simulation_master()
                      */
                     int chunk_index = get_mpi_chunk_index();
                     int border_start = (chunk_index + 1) * get_mpi_chunk_width() - get_mpi_chunk_border_width();
-                    space_next->raw_copy_to(border_right_connection_send.get_buffer()->data(), border_start, get_mpi_chunk_border_width());                   
-                    
-                    /*for(int i = 0; i < rules.get_space_height() * get_mpi_chunk_border_width(); ++i)
-                    {
-                        border_right_connection_send.get_buffer()->data()[i] = 0.75;
-                    }*/
-                    
+                    space_next->raw_copy_to(border_right_connection_send.get_buffer()->data(), border_start, get_mpi_chunk_border_width());               
+
                     border_right_connection_send.flush();
                 }
 
@@ -535,7 +483,7 @@ void simulator::run_simulation_master()
                 stage = 2;
             }
         }
-        else if(stage == 2)
+        else if (stage == 2)
         {
             if (APP_PERFTEST)
             {

@@ -1,9 +1,4 @@
 #pragma once
-#define MODE_SIMULATE 0
-#define MODE_TEST_INITIALIZE 1
-#define MODE_TEST_MASKS 2
-#define MODE_TEST_COLORS 3
-#define MODE_TEST_STATE_FUNCTION 4
 
 #include <iostream>
 #include <math.h>
@@ -21,10 +16,8 @@
 #include "communication.h"
 #include <unistd.h>
 
-
 using namespace std;
 
-#define SIMULATOR_MODE MODE_SIMULATE //Set the mode of the simulator
 #define SIMULATOR_INITIALIZATION_FUNCTION space_set_splat //The function used for initialization
 
 #define SPACE_QUEUE_MAX_SIZE 32 //the queue size used by the program
