@@ -19,6 +19,7 @@
 #include "ruleset.h"
 #include "aligned_vector.h"
 #include "communication.h"
+#include <unistd.h>
 
 
 using namespace std;

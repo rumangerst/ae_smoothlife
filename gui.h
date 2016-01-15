@@ -1,8 +1,6 @@
 #pragma once
 #include "simulator.h"
 #include "communication.h"
-#include "mpi_connection.h"
-#include "mpi_variable_buffer_connection.h"
 
 /**
  * @brief General GUI class with MPI support

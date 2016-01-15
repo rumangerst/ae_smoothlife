@@ -1,6 +1,6 @@
 #include "simulator.h"
 #include "aligned_vector.h"
-#include "mpi_connection.h"
+#include "mpi_async_connection.h"
 #include <assert.h>
 #include <mpi.h>
 #include <omp.h>
@@ -47,7 +47,7 @@ void simulator::initialize(vectorized_matrix<float> & predefined_space)
     // Set it to 0 then, so we can use swap()
     int queue_size;
 
-    if (!APP_PERFTEST && mpi_get_role() == mpi_role::SIMULATOR_MASTER)
+    if (!APP_UNIT_TEST && !APP_PERFTEST && mpi_get_role() == mpi_role::SIMULATOR_MASTER)
         queue_size = SPACE_QUEUE_MAX_SIZE;
     else
         queue_size = 0;
@@ -215,9 +215,14 @@ void simulator::simulate_step(int x_start, int w)
             //Calculate the new state based on fillings n and m
             //Smooth state function must be clamped to [0,1] (this is also done by author's implementation!)
             space_next->setValue(rules.get_is_discrete() ? discrete_state_func_1(n, m) : fmax(0, fmin(1, next_step_as_euler(x, y, n, m))), x, y);
+            
+            
+            //space_next->setValue(space_current->getValue(x,y),x,y);
 
         }
     }
+    
+    //cerr << "Disabled calc" << endl;
 
     ++spacetime;
 }
@@ -228,7 +233,7 @@ void simulator::run_simulation_slave()
 
     // Connection from master to slave (communication)
 
-    mpi_connection<int> communication_connection = mpi_connection<int>(
+    mpi_async_connection<int> communication_connection = mpi_async_connection<int>(
             0,
             mpi_rank(),
             APP_MPI_TAG_COMMUNICATION,
@@ -239,7 +244,7 @@ void simulator::run_simulation_slave()
     });
 
     //Connection from slave to master (data)
-    mpi_connection<float> space_connection = mpi_connection<float>(
+    mpi_async_connection<float> space_connection = mpi_async_connection<float>(
             mpi_rank(),
             0,
             APP_MPI_TAG_SPACE,
@@ -250,42 +255,62 @@ void simulator::run_simulation_slave()
     int left_rank = matrix_index_wrapped(mpi_rank() - 1, 1, mpi_comm_size(), 1, mpi_comm_size());
     int right_rank = matrix_index_wrapped(mpi_rank() + 1, 1, mpi_comm_size(), 1, mpi_comm_size());
 
-    mpi_connection<float> border_left_connection_recieve = mpi_connection<float>(
-            left_rank,
-            mpi_rank(),
-            APP_MPI_TAG_BORDER_LEFT,
-            rules.get_space_height() * get_mpi_chunk_border_width(),
-            MPI_FLOAT);
-    mpi_connection<float> border_left_connection_send = mpi_connection<float>(
+    
+    mpi_async_connection<float> border_left_connection_send = mpi_async_connection<float>(
             mpi_rank(),
             left_rank,
-            APP_MPI_TAG_BORDER_LEFT,
-            rules.get_space_height() * get_mpi_chunk_border_width(),
-            MPI_FLOAT);
-    mpi_connection<float> border_right_connection_recieve = mpi_connection<float>(
-            right_rank,
-            mpi_rank(),
             APP_MPI_TAG_BORDER_RIGHT,
             rules.get_space_height() * get_mpi_chunk_border_width(),
-            MPI_FLOAT);
-    mpi_connection<float> border_right_connection_send = mpi_connection<float>(
+            MPI_FLOAT); //Sends the left border to the left rank -> Will be its right border
+    mpi_async_connection<float> border_right_connection_send = mpi_async_connection<float>(
             mpi_rank(),
             right_rank,
             APP_MPI_TAG_BORDER_RIGHT,
             rules.get_space_height() * get_mpi_chunk_border_width(),
-            MPI_FLOAT);
+            MPI_FLOAT); //Sends the right border to the right rank -> Will be its left border
+            
+    mpi_async_connection<float> border_right_connection_recieve = mpi_async_connection<float>(
+            right_rank,
+            mpi_rank(),
+            APP_MPI_TAG_BORDER_RIGHT,
+            rules.get_space_height() * get_mpi_chunk_border_width(),
+            MPI_FLOAT); //Recieves the right border of this rank from the right rank
+    mpi_async_connection<float> border_left_connection_recieve = mpi_async_connection<float>(
+            left_rank,
+            mpi_rank(),
+            APP_MPI_TAG_BORDER_LEFT,
+            rules.get_space_height() * get_mpi_chunk_border_width(),
+            MPI_FLOAT); //Recieves the left border of this rank from the left rank
+    
 
     // Use broadcast to obtain the initial space from master
     vector<float> buffer_space = vector<float>(rules.get_space_width() * rules.get_space_height());
     MPI_Bcast(buffer_space.data(), rules.get_space_width() * rules.get_space_height(), MPI_FLOAT, 0, MPI_COMM_WORLD);
-    space_current->raw_overwrite(buffer_space.data(), get_mpi_chunk_index() * get_mpi_chunk_width(), get_mpi_chunk_border_width(), get_mpi_chunk_width(), rules.get_space_width());
+
+    space_current->raw_overwrite(buffer_space.data(),
+        get_mpi_chunk_index() * get_mpi_chunk_width(),
+        get_mpi_chunk_border_width(),
+        get_mpi_chunk_width(),
+        rules.get_space_width()); //Overwrite main space
+    
+    space_current->raw_overwrite(buffer_space.data(),
+        get_mpi_chunk_index(left_rank) * get_mpi_chunk_width() + get_mpi_chunk_width() - get_mpi_chunk_border_width(),
+        0,
+        get_mpi_chunk_border_width(),
+        rules.get_space_width()); //Overwrite left border with right border of left rank
+
+    space_current->raw_overwrite(buffer_space.data(),
+        get_mpi_chunk_index(right_rank) * get_mpi_chunk_width(),
+        get_mpi_chunk_border_width() + get_mpi_chunk_width(),
+        get_mpi_chunk_border_width(),
+        rules.get_space_width()); //Overwrite right border with left border of right rank
 
     running = true;
     communication_connection.flush();
 
     while (running)
     {
-        if (communication_connection.update() == mpi_connection<int>::states::IDLE)
+        if (communication_connection.update() == mpi_async_connection<int>::states::IDLE)
         {
             cout << "Slave | Got COMMUNICATION signal" << endl;
             int tag = (*communication_connection.get_buffer())[0];
@@ -294,57 +319,54 @@ void simulator::run_simulation_slave()
             communication_connection.flush();
         }
 
-        if (space_connection.update() == mpi_connection<float>::states::IDLE
-                & border_left_connection_recieve.update() == mpi_connection<float>::states::IDLE
-                & border_right_connection_recieve.update() == mpi_connection<float>::states::IDLE
-                & border_left_connection_send.update() == mpi_connection<float>::states::IDLE
-                & border_right_connection_send.update() == mpi_connection<float>::states::IDLE)
+        if (space_connection.update() == mpi_async_connection<float>::states::IDLE
+                & border_left_connection_recieve.update() == mpi_async_connection<float>::states::IDLE
+                & border_right_connection_recieve.update() == mpi_async_connection<float>::states::IDLE
+                & border_left_connection_send.update() == mpi_async_connection<float>::states::IDLE
+                & border_right_connection_send.update() == mpi_async_connection<float>::states::IDLE)
         {
+            cout << "slave: " << spacetime << endl;
+            
             //Unless first time, copy the borders
             if (spacetime != 0)
-            {
-                cout << "Slave | Copy borders from connections ..." << endl;
-                //space_current->raw_overwrite(border_left_connection_recieve.get_buffer()->data(), 0, get_mpi_chunk_border_width());
-                //space_current->raw_overwrite(border_right_connection_recieve.get_buffer()->data(), get_mpi_chunk_border_width() + get_mpi_chunk_width(), get_mpi_chunk_border_width());
-                space_current->raw_overwrite(border_right_connection_recieve.get_buffer()->data(), 0, get_mpi_chunk_border_width());
-                space_current->raw_overwrite(border_left_connection_recieve.get_buffer()->data(), get_mpi_chunk_border_width() + get_mpi_chunk_width(), get_mpi_chunk_border_width());
+            {               
+                space_current->raw_overwrite(border_left_connection_recieve.get_buffer()->data(), 0, get_mpi_chunk_border_width()); //Overwrite left border with border provided by left rank
+                space_current->raw_overwrite(border_right_connection_recieve.get_buffer()->data(), get_mpi_chunk_border_width() + get_mpi_chunk_width(), get_mpi_chunk_border_width()); //Overwrite right border with border provided by right rank
                 
                 border_left_connection_recieve.flush();
                 border_right_connection_recieve.flush();
             }
 
-            cout << "Slave | Simulating" << endl;
             /**
              * The slave simulator only has to simulate one chunk. So we call simulate_step with this size.
              * The simulator obtains its left and right borders from the neighbors via MPI. The data is stored in the border area left and right
              * to the chunk area. This border area has a size % CACHELINE_SIZE
              */
             simulate_step(get_mpi_chunk_border_width(), get_mpi_chunk_width());
-            space->swap(); //The queue is disabled, use swap which yields greater performance
-
-            cout << "Slave | Copy field to space connection" << endl;
+            
             //Copy the complete field into the space buffer and the borders into their respective buffers
-            space_current->raw_copy_to(space_connection.get_buffer()->data(), get_mpi_chunk_border_width(), get_mpi_chunk_width());
-            space_connection.flush();
+            space_next->raw_copy_to(space_connection.get_buffer()->data(), get_mpi_chunk_border_width(), get_mpi_chunk_width());   
+            
 
             if (left_rank != 0)
             {
-                cout << "Slave | Update left rank = " << left_rank << endl;
                 /**
                  * We want the left border. It starts at chunk_border_width
                  */
-                space_current->raw_copy_to(border_left_connection_send.get_buffer()->data(), get_mpi_chunk_border_width(), get_mpi_chunk_border_width());
+                space_next->raw_copy_to(border_left_connection_send.get_buffer()->data(), get_mpi_chunk_border_width(), get_mpi_chunk_border_width());
                 border_left_connection_send.flush();
             }
             if (right_rank != 0)
             {
-                cout << "Slave | Update right rank = " << right_rank << endl;
                 /**
                  * We want the right border. It starts at chunk_border_width + chunk_width - chunk_border_width = chunk_width
                  */
-                space_current->raw_copy_to(border_right_connection_send.get_buffer()->data(), get_mpi_chunk_width(), get_mpi_chunk_border_width());
+                space_next->raw_copy_to(border_right_connection_send.get_buffer()->data(), get_mpi_chunk_width(), get_mpi_chunk_border_width());
                 border_right_connection_send.flush();
             }
+            
+            space_connection.flush();
+            space->swap(); //The queue is disabled, use swap which yields greater performance
 
         }
     }
@@ -362,13 +384,13 @@ void simulator::run_simulation_master()
     ulong perf_spacetime_start = 0;
 #endif    
 
-    vector<mpi_connection<int>> communication_connections;
-    vector<mpi_connection<float>> space_connections;
+    vector<mpi_async_connection<int>> communication_connections;
+    vector<mpi_async_connection<float>> space_connections;
 
     for (int i = 1; i < mpi_comm_size(); ++i)
     {
         // Connection from master to slave (communication)
-        communication_connections.push_back(mpi_connection<int>(
+        communication_connections.push_back(mpi_async_connection<int>(
                                             0,
                                             i,
                                             APP_MPI_TAG_COMMUNICATION,
@@ -379,7 +401,7 @@ void simulator::run_simulation_master()
     for (int i = 1; i < mpi_comm_size(); ++i)
     {
         // Connection from slave to master (calculated spaces)
-        space_connections.push_back(mpi_connection<float>(
+        space_connections.push_back(mpi_async_connection<float>(
                                     i,
                                     0,
                                     APP_MPI_TAG_SPACE,
@@ -391,16 +413,16 @@ void simulator::run_simulation_master()
     int left_rank = matrix_index_wrapped(mpi_rank() - 1, 1, mpi_comm_size(), 1, mpi_comm_size());
     int right_rank = matrix_index_wrapped(mpi_rank() + 1, 1, mpi_comm_size(), 1, mpi_comm_size());
 
-    mpi_connection<float> border_left_connection_send = mpi_connection<float>(
+    mpi_async_connection<float> border_left_connection_send = mpi_async_connection<float>(
             mpi_rank(),
             left_rank,
-            APP_MPI_TAG_BORDER_LEFT,
+            APP_MPI_TAG_BORDER_RIGHT,
             rules.get_space_height() * get_mpi_chunk_border_width(),
             MPI_FLOAT);
-    mpi_connection<float> border_right_connection_send = mpi_connection<float>(
+    mpi_async_connection<float> border_right_connection_send = mpi_async_connection<float>(
             mpi_rank(),
             right_rank,
-            APP_MPI_TAG_BORDER_RIGHT,
+            APP_MPI_TAG_BORDER_LEFT,
             rules.get_space_height() * get_mpi_chunk_border_width(),
             MPI_FLOAT);
 
@@ -413,10 +435,10 @@ void simulator::run_simulation_master()
 
     while (running)
     {
-        // Simulate the master if it did not yet
         if (stage == 0)
         {
-            cout << "Master | Simulating" << endl;
+            cout << "master: " << spacetime << endl;
+            
             /**
              * The master simulator is special in comparison to the slaves. As the master holds the complete field, it can 
              * access all data without copying/synching.
@@ -424,7 +446,8 @@ void simulator::run_simulation_master()
              * 
              * If we only have one rank, the master will calculate all of them
              */            
-            simulate_step(get_mpi_chunk_index() * get_mpi_chunk_width(), get_mpi_chunk_width());
+            simulate_step(get_mpi_chunk_index() * get_mpi_chunk_width(), get_mpi_chunk_width());            
+         
 
             stage = 1;
         }
@@ -433,12 +456,12 @@ void simulator::run_simulation_master()
             //Update the status of our connections
             bool slaves_ready = true;
 
-            slaves_ready &= border_left_connection_send.update() == mpi_connection<float>::states::IDLE;
-            slaves_ready &= border_right_connection_send.update() == mpi_connection<float>::states::IDLE;
+            slaves_ready &= border_left_connection_send.update() == mpi_async_connection<float>::states::IDLE;
+            slaves_ready &= border_right_connection_send.update() == mpi_async_connection<float>::states::IDLE;
 
-            for (mpi_connection<float> & conn : space_connections)
+            for (mpi_async_connection<float> & conn : space_connections)
             {
-                slaves_ready &= conn.update() == mpi_connection<float>::states::IDLE;
+                slaves_ready &= conn.update() == mpi_async_connection<float>::states::IDLE;
             }
 
             /**
@@ -449,40 +472,47 @@ void simulator::run_simulation_master()
                 //Integrate data from slaves if not first time
                 if (spacetime != 0)
                 {
-                    cout << "Master | Getting data from slaves" << endl;
+                    //cout << "Master | Getting data from slaves" << endl;
 
-                    for (mpi_connection<float> & conn : space_connections)
+                    for (mpi_async_connection<float> & conn : space_connections)
                     {
                         int chunk_index = get_mpi_chunk_index(conn.get_rank_sender());
+                        
                         space_next->raw_overwrite(conn.get_buffer()->data(), chunk_index * get_mpi_chunk_width(), get_mpi_chunk_width());
 
                         //Ask for new data
                         conn.flush();
                     }
-                }
+                }               
+              
 
                 //Send the borders to the ranks that need them
                 //Use space_next!!! We want to send the result of the calculation!
                 if (left_rank != 0)
                 {
-                    cout << "Master | Updating left rank =  " << left_rank << endl;
                     /*
                      * We want the left border. It starts at chunk_index * chunk_width
                      */
                     int chunk_index = get_mpi_chunk_index();
-                    int border_start = chunk_index * get_mpi_chunk_border_width();
+                    int border_start = chunk_index * get_mpi_chunk_width();
                     space_next->raw_copy_to(border_left_connection_send.get_buffer()->data(), border_start, get_mpi_chunk_border_width());
+                                       
                     border_left_connection_send.flush();
                 }
                 if (right_rank != 0)
                 {
-                    cout << "Master | Updating right rank = " << right_rank << endl;
                     /**
                      * We want the right border. It starts at (chunk_index + 1) * chunk_width - chunk_border_width
                      */
                     int chunk_index = get_mpi_chunk_index();
-                    int border_start = (chunk_index + 1) * get_mpi_chunk_border_width() - get_mpi_chunk_border_width();
-                    space_next->raw_copy_to(border_right_connection_send.get_buffer()->data(), border_start, get_mpi_chunk_border_width());
+                    int border_start = (chunk_index + 1) * get_mpi_chunk_width() - get_mpi_chunk_border_width();
+                    space_next->raw_copy_to(border_right_connection_send.get_buffer()->data(), border_start, get_mpi_chunk_border_width());                   
+                    
+                    /*for(int i = 0; i < rules.get_space_height() * get_mpi_chunk_border_width(); ++i)
+                    {
+                        border_right_connection_send.get_buffer()->data()[i] = 0.75;
+                    }*/
+                    
                     border_right_connection_send.flush();
                 }
 
@@ -514,17 +544,18 @@ void simulator::run_simulation_master()
             else
             {
                 stage = space->push() ? 0 : stage; //Next step if queue is not full
+                sleep(3);
             }
         }
     }
 
     //Send the shutdown signal to the slaves
-    for (mpi_connection<int> & connection : communication_connections)
+    for (mpi_async_connection<int> & connection : communication_connections)
     {
         cout << "MPI Master | Shutting down slave rank ..." << connection.get_rank_reciever() << endl;
 
         //Wait until finished
-        while (connection.update() != mpi_connection<int>::states::IDLE)
+        while (connection.update() != mpi_async_connection<int>::states::IDLE)
         {
 
         }
@@ -538,7 +569,7 @@ void simulator::run_simulation_master()
         connection.flush();
 
         //Wait until finished
-        while (connection.update() != mpi_connection<int>::states::IDLE)
+        while (connection.update() != mpi_async_connection<int>::states::IDLE)
         {
 
         }

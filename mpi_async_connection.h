@@ -7,9 +7,9 @@ using namespace std;
 
 template <typename T>
 /**
-* @brief Contains a MPI connection between sender and reciever.
+* @brief Contains an async MPI connection between sender and reciever.
 */
-class mpi_connection
+class mpi_async_connection
 {
 public:
 
@@ -19,7 +19,7 @@ public:
         DATA = 1  //The buffer is sent. Sender waits until data is sent. Reciever waits for sending finished.
     };
     
-    mpi_connection(int _sender, int _reciever, int _tag, MPI_Datatype _datatype, aligned_vector<T> initial) : 
+    mpi_async_connection(int _sender, int _reciever, int _tag, MPI_Datatype _datatype, aligned_vector<T> initial) : 
         rank_sender(_sender),
         rank_reciever(_reciever),
         mpi_tag(_tag),
@@ -46,13 +46,13 @@ public:
         }        
     }   
     
-    mpi_connection(int _sender, int _reciever, int _tag, int _buffer_size, MPI_Datatype _datatype) : 
-    mpi_connection(_sender,_reciever,_tag,_datatype,aligned_vector<T>(_buffer_size))
+    mpi_async_connection(int _sender, int _reciever, int _tag, int _buffer_size, MPI_Datatype _datatype) : 
+    mpi_async_connection(_sender,_reciever,_tag,_datatype,aligned_vector<T>(_buffer_size))
     
     {
     }    
     
-    ~mpi_connection()
+    ~mpi_async_connection()
     {
         cancel();
     }
