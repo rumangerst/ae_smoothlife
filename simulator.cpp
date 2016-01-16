@@ -20,12 +20,14 @@
  */
 #define EPSILON 5.0e-5
 
-inline bool isEqual(cfloat a, cfloat b, cfloat deviation) {
+inline bool isEqual(cfloat a, cfloat b, cfloat deviation)
+{
     return abs(a - b) < deviation;
 }
 
-inline bool isEqual(cfloat a, cfloat b) {
-    return isEqual(a,b, EPSILON);
+inline bool isEqual(cfloat a, cfloat b)
+{
+    return isEqual(a, b, EPSILON);
 }
 
 simulator::simulator(const ruleset & r) : rules(r)
@@ -131,20 +133,20 @@ void simulator::simulate_step()
 
 void simulator::simulate_step(int x_start, int w)
 {
-    #pragma omp parallel for schedule(static)
+#pragma omp parallel for schedule(static)
     for (int x = x_start; x < x_start + w; ++x)
-    {        
+    {
         for (int y = 0; y < rules.get_space_height(); ++y)
         {
             float n;
-            float m;        
+            float m;
 
             // get the alignment offset caused during iteration of space
             // NOTE: for left/right border, we need two different offsets
             int off = ((x - offset_from_mask_center) >= 0) ?
                     (x - offset_from_mask_center) % CACHELINE_FLOATS :
                     CACHELINE_FLOATS - ((offset_from_mask_center - x) % CACHELINE_FLOATS); // we calc this new inside the function in this case
-            
+
             assert(off >= 0 && off < CACHELINE_FLOATS);
             //(x - offset_from_mask_center) >= 0
             //(x + outer_masks[off].getRightOffset() < this->space_current->getNumCols())
@@ -158,7 +160,7 @@ void simulator::simulate_step(int x_start, int w)
                 n = getFilling_unoptimized(x, y, inner_masks[0], inner_mask_sum); // filling of inner circle
                 m = getFilling_unoptimized(x, y, outer_masks[0], outer_mask_sum); // filling of outer ring
             }
-            
+
             //Calculate the new state based on fillings n and m
             //Smooth state function must be clamped to [0,1] (this is also done by author's implementation!)
             space_next->setValue(rules.get_is_discrete() ? discrete_state_func_1(n, m) : fmax(0, fmin(1, next_step_as_euler(x, y, n, m))), x, y);
@@ -176,20 +178,21 @@ void simulator::run_simulation_slave()
 
     // Connection from master to slave (communication)
 
-    mpi_async_connection<int> communication_connection = mpi_async_connection<int>(
+    mpi_dual_connection<int> communication_connection = mpi_dual_connection<int>(
             0,
-            mpi_rank(),
+            false,
+            true,
             APP_MPI_TAG_COMMUNICATION,
             MPI_INT,
-            aligned_vector<int>
-    {
+            aligned_vector<int>{
         APP_COMMUNICATION_RUNNING
     });
 
     //Connection from slave to master (data)
-    mpi_async_connection<float> space_connection = mpi_async_connection<float>(
-            mpi_rank(),
+    mpi_dual_connection<float> space_connection = mpi_dual_connection<float>(
             0,
+            true,
+            false,
             APP_MPI_TAG_SPACE,
             rules.get_space_height() * get_mpi_chunk_width(),
             MPI_FLOAT);
@@ -198,33 +201,20 @@ void simulator::run_simulation_slave()
     int left_rank = matrix_index_wrapped(mpi_rank() - 1, 1, mpi_comm_size(), 1, mpi_comm_size());
     int right_rank = matrix_index_wrapped(mpi_rank() + 1, 1, mpi_comm_size(), 1, mpi_comm_size());
 
-
-    mpi_async_connection<float> border_left_connection_send = mpi_async_connection<float>(
-            mpi_rank(),
+    mpi_dual_connection<float> border_left_connection = mpi_dual_connection<float>(
             left_rank,
-            APP_MPI_TAG_BORDER_RIGHT,
-            rules.get_space_height() * get_mpi_chunk_border_width(),
-            MPI_FLOAT); //Sends the left border to the left rank -> Will be its right border
-    mpi_async_connection<float> border_right_connection_send = mpi_async_connection<float>(
-            mpi_rank(),
-            right_rank,
-            APP_MPI_TAG_BORDER_RIGHT,
-            rules.get_space_height() * get_mpi_chunk_border_width(),
-            MPI_FLOAT); //Sends the right border to the right rank -> Will be its left border
-
-    mpi_async_connection<float> border_right_connection_recieve = mpi_async_connection<float>(
-            right_rank,
-            mpi_rank(),
-            APP_MPI_TAG_BORDER_RIGHT,
-            rules.get_space_height() * get_mpi_chunk_border_width(),
-            MPI_FLOAT); //Recieves the right border of this rank from the right rank
-    mpi_async_connection<float> border_left_connection_recieve = mpi_async_connection<float>(
-            left_rank,
-            mpi_rank(),
+            left_rank != 0,
+            true,
             APP_MPI_TAG_BORDER_LEFT,
             rules.get_space_height() * get_mpi_chunk_border_width(),
-            MPI_FLOAT); //Recieves the left border of this rank from the left rank
-
+            MPI_FLOAT);
+    mpi_dual_connection<float> border_right_connection = mpi_dual_connection<float>(
+            right_rank,
+            right_rank != 0,
+            true,
+            APP_MPI_TAG_BORDER_RIGHT,
+            rules.get_space_height() * get_mpi_chunk_border_width(),
+            MPI_FLOAT);
 
     // Use broadcast to obtain the initial space from master
     vector<float> buffer_space = vector<float>(rules.get_space_width() * rules.get_space_height());
@@ -248,77 +238,41 @@ void simulator::run_simulation_slave()
                                  get_mpi_chunk_border_width(),
                                  rules.get_space_width()); //Overwrite right border with left border of right rank
 
-        running = true;
-    communication_connection.flush();    
-    
+    running = true;
 
     while (running)
     {
-        if (communication_connection.update() == mpi_async_connection<int>::states::IDLE)
+        //Synchronize borders if not the first time
+        if (spacetime != 0)
         {
-            cout << "Slave | Got COMMUNICATION signal" << endl;
-            int tag = (*communication_connection.get_buffer())[0];
-            running = (tag & APP_COMMUNICATION_RUNNING) == APP_COMMUNICATION_RUNNING;
+            if (left_rank != 0)
+                space_next->raw_copy_to(border_left_connection.get_buffer_send()->data(), get_mpi_chunk_border_width(), get_mpi_chunk_border_width());
+            if (right_rank != 0)
+                space_next->raw_copy_to(border_right_connection.get_buffer_send()->data(), get_mpi_chunk_width(), get_mpi_chunk_border_width());
 
-            communication_connection.flush();
+            border_left_connection.flush();
+            border_right_connection.flush();
+
+            space_current->raw_overwrite(border_left_connection.get_buffer_recieve()->data(), 0, get_mpi_chunk_border_width()); //Overwrite left border with border provided by left rank
+            space_current->raw_overwrite(border_right_connection.get_buffer_recieve()->data(), get_mpi_chunk_border_width() + get_mpi_chunk_width(), get_mpi_chunk_border_width()); //Overwrite right border with border provided by right rank
         }
 
         /**
-         * Wait until all connections are ready.
-         * We do not use MPI_Sendrev because of:
-         * 
-         * - We cannot cancel MPI_Sendrecv
-         * - It did nothing to performance
+         * The slave simulator only has to simulate one chunk. So we call simulate_step with this size.
+         * The simulator obtains its left and right borders from the neighbors via MPI. The data is stored in the border area left and right
+         * to the chunk area. This border area has a size % CACHELINE_SIZE
          */
-        if (space_connection.update() == mpi_async_connection<float>::states::IDLE
-                & border_left_connection_recieve.update() == mpi_async_connection<float>::states::IDLE
-                & border_right_connection_recieve.update() == mpi_async_connection<float>::states::IDLE
-                & border_left_connection_send.update() == mpi_async_connection<float>::states::IDLE
-                & border_right_connection_send.update() == mpi_async_connection<float>::states::IDLE)
-        {
+        simulate_step(get_mpi_chunk_border_width(), get_mpi_chunk_width());
 
-            //Unless first time, copy the borders
-            if (spacetime != 0)
-            {
-                space_current->raw_overwrite(border_left_connection_recieve.get_buffer()->data(), 0, get_mpi_chunk_border_width()); //Overwrite left border with border provided by left rank
-                space_current->raw_overwrite(border_right_connection_recieve.get_buffer()->data(), get_mpi_chunk_border_width() + get_mpi_chunk_width(), get_mpi_chunk_border_width()); //Overwrite right border with border provided by right rank
+        //Copy the complete field into the space buffer and the borders into their respective buffers
+        space_next->raw_copy_to(space_connection.get_buffer_send()->data(), get_mpi_chunk_border_width(), get_mpi_chunk_width());
+        space_connection.flush();
 
-                border_left_connection_recieve.flush();
-                border_right_connection_recieve.flush();
-            }
+        space->swap(); //The queue is disabled, use swap which yields greater performance
 
-            /**
-             * The slave simulator only has to simulate one chunk. So we call simulate_step with this size.
-             * The simulator obtains its left and right borders from the neighbors via MPI. The data is stored in the border area left and right
-             * to the chunk area. This border area has a size % CACHELINE_SIZE
-             */
-            simulate_step(get_mpi_chunk_border_width(), get_mpi_chunk_width());
-
-            //Copy the complete field into the space buffer and the borders into their respective buffers
-            space_next->raw_copy_to(space_connection.get_buffer()->data(), get_mpi_chunk_border_width(), get_mpi_chunk_width());
-
-
-            if (left_rank != 0)
-            {
-                /**
-                 * We want the left border. It starts at chunk_border_width
-                 */
-                space_next->raw_copy_to(border_left_connection_send.get_buffer()->data(), get_mpi_chunk_border_width(), get_mpi_chunk_border_width());
-                border_left_connection_send.flush();
-            }
-            if (right_rank != 0)
-            {
-                /**
-                 * We want the right border. It starts at chunk_border_width + chunk_width - chunk_border_width = chunk_width
-                 */
-                space_next->raw_copy_to(border_right_connection_send.get_buffer()->data(), get_mpi_chunk_width(), get_mpi_chunk_border_width());
-                border_right_connection_send.flush();
-            }
-
-            space_connection.flush();
-            space->swap(); //The queue is disabled, use swap which yields greater performance
-
-        }
+        //Update communication signal
+        communication_connection.flush();
+        running = communication_connection.get_buffer_recieve()->data()[0] & APP_COMMUNICATION_RUNNING == APP_COMMUNICATION_RUNNING;
     }
 
     cout << "Simulator | Slave shut down." << endl;
@@ -334,15 +288,16 @@ void simulator::run_simulation_master()
     ulong perf_spacetime_start = 0;
 #endif    
 
-    vector<mpi_async_connection<int>> communication_connections;
-    vector<mpi_async_connection<float>> space_connections;
+    vector<mpi_dual_connection<int>> communication_connections;
+    vector<mpi_dual_connection<float>> space_connections;
 
     for (int i = 1; i < mpi_comm_size(); ++i)
     {
         // Connection from master to slave (communication)
-        communication_connections.push_back(mpi_async_connection<int>(
-                                            0,
+        communication_connections.push_back(mpi_dual_connection<int>(
                                             i,
+                                            true,
+                                            false,
                                             APP_MPI_TAG_COMMUNICATION,
                                             MPI_INT,
                                             aligned_vector<int>{APP_COMMUNICATION_RUNNING}));
@@ -351,9 +306,10 @@ void simulator::run_simulation_master()
     for (int i = 1; i < mpi_comm_size(); ++i)
     {
         // Connection from slave to master (calculated spaces)
-        space_connections.push_back(mpi_async_connection<float>(
+        space_connections.push_back(mpi_dual_connection<float>(
                                     i,
-                                    0,
+                                    false,
+                                    true,
                                     APP_MPI_TAG_SPACE,
                                     rules.get_space_height() * get_mpi_chunk_width(),
                                     MPI_FLOAT));
@@ -363,16 +319,18 @@ void simulator::run_simulation_master()
     int left_rank = matrix_index_wrapped(mpi_rank() - 1, 1, mpi_comm_size(), 1, mpi_comm_size());
     int right_rank = matrix_index_wrapped(mpi_rank() + 1, 1, mpi_comm_size(), 1, mpi_comm_size());
 
-    mpi_async_connection<float> border_left_connection_send = mpi_async_connection<float>(
-            mpi_rank(),
+    mpi_dual_connection<float> border_left_connection = mpi_dual_connection<float>(
             left_rank,
-            APP_MPI_TAG_BORDER_RIGHT,
+            true,
+            false,
+            APP_MPI_TAG_BORDER_LEFT,
             rules.get_space_height() * get_mpi_chunk_border_width(),
             MPI_FLOAT);
-    mpi_async_connection<float> border_right_connection_send = mpi_async_connection<float>(
-            mpi_rank(),
+    mpi_dual_connection<float> border_right_connection = mpi_dual_connection<float>(
             right_rank,
-            APP_MPI_TAG_BORDER_LEFT,
+            true,
+            false,
+            APP_MPI_TAG_BORDER_RIGHT,
             rules.get_space_height() * get_mpi_chunk_border_width(),
             MPI_FLOAT);
 
@@ -381,148 +339,79 @@ void simulator::run_simulation_master()
     space->buffer_read_ptr()->raw_copy_to(buffer_space.data());
     MPI_Bcast(buffer_space.data(), rules.get_space_width() * rules.get_space_height(), MPI_FLOAT, 0, MPI_COMM_WORLD);
 
-    /**
-     * The master simulator has different stages:
-     * stage 0: Idle. We can simulate 1 time step further.
-     * stage 1: Sync phase. Assemble the final space from slave simulators. Then send borders to them
-     * stage 2: Queue phase. Try to enqueue the newly calculated space. The go back to stage 0
-     */
-    int stage = 0;
-    
 
     while (running)
     {
-        if (stage == 0)
+        if (spacetime != 0)
         {
-            /**
-             * The master simulator is special in comparison to the slaves. As the master holds the complete field, it can 
-             * access all data without copying/synching.
-             * We want the master to have a workload, too; so we give it the first data chunk (the width of the field divided by count of ranks)
-             * 
-             * If we only have one rank, the master will calculate all of them
-             */
-            simulate_step(get_mpi_chunk_index() * get_mpi_chunk_width(), get_mpi_chunk_width());
-
-
-            stage = 1;
-        }
-        else if (stage == 1)
-        {
-            //Update the status of our connections
-            bool slaves_ready = true;
-
-            slaves_ready &= border_left_connection_send.update() == mpi_async_connection<float>::states::IDLE;
-            slaves_ready &= border_right_connection_send.update() == mpi_async_connection<float>::states::IDLE;
-
-            for (mpi_async_connection<float> & conn : space_connections)
+            if (left_rank != 0)
             {
-                slaves_ready &= conn.update() == mpi_async_connection<float>::states::IDLE;
+                /*
+                 * We want the left border. It starts at chunk_index * chunk_width
+                 */
+                int chunk_index = get_mpi_chunk_index();
+                int border_start = chunk_index * get_mpi_chunk_width();
+                space_next->raw_copy_to(border_left_connection.get_buffer_send()->data(), border_start, get_mpi_chunk_border_width());
+
+                border_left_connection.flush();
             }
-
-            /**
-             * If all slaves (including the master's own activity) is finished, put everything together
-             */
-            if (slaves_ready)
+            if (right_rank != 0)
             {
-                //Integrate data from slaves if not first time
-                if (spacetime != 0)
-                {
-                    // There is no nice way to integrate this loop into the conn.update() loop :(
-                    for (mpi_async_connection<float> & conn : space_connections)
-                    {
-                        int chunk_index = get_mpi_chunk_index(conn.get_rank_sender());
-                        space_next->raw_overwrite(conn.get_buffer()->data(), chunk_index * get_mpi_chunk_width(), get_mpi_chunk_width());
+                /**
+                 * We want the right border. It starts at (chunk_index + 1) * chunk_width - chunk_border_width
+                 */
+                int chunk_index = get_mpi_chunk_index();
+                int border_start = (chunk_index + 1) * get_mpi_chunk_width() - get_mpi_chunk_border_width();
+                space_next->raw_copy_to(border_right_connection.get_buffer_send()->data(), border_start, get_mpi_chunk_border_width());
 
-                        conn.flush();
-                    }
-                }
-
-                //Send the borders to the ranks that need them
-                //Use space_next!!! We want to send the result of the calculation!
-                if (left_rank != 0)
-                {
-                    /*
-                     * We want the left border. It starts at chunk_index * chunk_width
-                     */
-                    int chunk_index = get_mpi_chunk_index();
-                    int border_start = chunk_index * get_mpi_chunk_width();
-                    space_next->raw_copy_to(border_left_connection_send.get_buffer()->data(), border_start, get_mpi_chunk_border_width());
-
-                    border_left_connection_send.flush();
-                }
-                if (right_rank != 0)
-                {
-                    /**
-                     * We want the right border. It starts at (chunk_index + 1) * chunk_width - chunk_border_width
-                     */
-                    int chunk_index = get_mpi_chunk_index();
-                    int border_start = (chunk_index + 1) * get_mpi_chunk_width() - get_mpi_chunk_border_width();
-                    space_next->raw_copy_to(border_right_connection_send.get_buffer()->data(), border_start, get_mpi_chunk_border_width());               
-
-                    border_right_connection_send.flush();
-                }
-
-                //Measure performance now as space is completed
-                if (ENABLE_PERF_MEASUREMENT)
-                {
-                    if (spacetime % 100 == 0)
-                    {
-                        auto perf_time_end = chrono::high_resolution_clock::now();
-                        double perf_time_seconds = chrono::duration<double>(perf_time_end - perf_time_start).count();
-
-                        cout << "Simulator | " << (spacetime - perf_spacetime_start) / perf_time_seconds << " calculations / s" << endl;
-
-                        perf_spacetime_start = spacetime;
-                        perf_time_start = chrono::high_resolution_clock::now();
-                    }
-                }
-
-                stage = 2;
+                border_right_connection.flush();
             }
         }
-        else if (stage == 2)
+
+        /**
+         * The master simulator is special in comparison to the slaves. As the master holds the complete field, it can 
+         * access all data without copying/synching.
+         * We want the master to have a workload, too; so we give it the first data chunk (the width of the field divided by count of ranks)
+         * 
+         * If we only have one rank, the master will calculate all of them
+         */
+        simulate_step(get_mpi_chunk_index() * get_mpi_chunk_width(), get_mpi_chunk_width());
+
+        for (mpi_dual_connection<float> & conn : space_connections)
         {
-            if (APP_PERFTEST)
+            conn.flush();
+
+            int chunk_index = get_mpi_chunk_index(conn.get_other_rank());
+            space_next->raw_overwrite(conn.get_buffer_recieve()->data(), chunk_index * get_mpi_chunk_width(), get_mpi_chunk_width());
+        }
+
+        if (ENABLE_PERF_MEASUREMENT)
+        {
+            if (spacetime % 100 == 0)
             {
-                space->swap();
-                stage = 0;
+                auto perf_time_end = chrono::high_resolution_clock::now();
+                double perf_time_seconds = chrono::duration<double>(perf_time_end - perf_time_start).count();
+
+                cout << "Simulator | " << (spacetime - perf_spacetime_start) / perf_time_seconds << " calculations / s" << endl;
+
+                perf_spacetime_start = spacetime;
+                perf_time_start = chrono::high_resolution_clock::now();
             }
-            else
-            {
-                stage = space->push() ? 0 : stage; //Next step if queue is not full
-            }
         }
-    }
-
-    //Send the shutdown signal to the slaves
-    for (mpi_async_connection<int> & connection : communication_connections)
-    {
-        cout << "MPI Master | Shutting down slave rank ..." << connection.get_rank_reciever() << endl;
-
-        //Wait until finished
-        while (connection.update() != mpi_async_connection<int>::states::IDLE)
+        
+        //Try to push into queue
+        while(!space->push()) {}
+        
+        //Send status signal
+        int communication_status =  running ? APP_COMMUNICATION_RUNNING : 0;
+        
+        for(mpi_dual_connection<int> & conn : communication_connections)
         {
-
+            conn.get_buffer_send()->data()[0] = communication_status;
+            conn.flush();
         }
-
-        //Remove "running" tag
-        int tag = (*connection.get_buffer())[0];
-        tag = tag & ~APP_MPI_TAG_COMMUNICATION;
-        (*connection.get_buffer())[0] = tag;
-
-        //Send the data
-        connection.flush();
-
-        //Wait until finished
-        while (connection.update() != mpi_async_connection<int>::states::IDLE)
-        {
-
-        }
-
-        cout << "MPI Master | Slave rank " << connection.get_rank_reciever() << " shut down." << endl;
     }
 }
-
 
 float simulator::getFilling(cint at_x, cint at_y, const vector<vectorized_matrix<float>> &masks, cint offset, cfloat mask_sum)
 {
@@ -543,7 +432,7 @@ float simulator::getFilling(cint at_x, cint at_y, const vector<vectorized_matrix
     assert(long(sim_space) % ALIGNMENT == 0);
     assert(long(mask_space) % ALIGNMENT == 0);
     //cout << "at_x: " << at_x << "  at_y: " << at_y << "  XB: " << XB << "  XE: " << XE << endl;
-    
+
     //NOTE: if XB or YB is negative, we do not need to check XE or YE - they have to be within the field boundaries
     float f = 0;
     if (XB >= 0)
@@ -559,11 +448,11 @@ float simulator::getFilling(cint at_x, cint at_y, const vector<vectorized_matrix
                     // Ideal case. Access within the space without crossing edges. Tested.
                     for (int y = YB; y < YE; ++y)
                     {
-                        cfloat const * s_row = sim_space + y*sim_ld + XB;         // space row + x_start
-                        cfloat const * m_row = mask_space + (y - YB) * mask_ld;   // mask row
+                        cfloat const * s_row = sim_space + y * sim_ld + XB; // space row + x_start
+                        cfloat const * m_row = mask_space + (y - YB) * mask_ld; // mask row
                         assert(!(long(s_row) % ALIGNMENT || long(m_row) % ALIGNMENT));
-                        #pragma omp simd aligned(s_row, m_row:64) reduction(+:f)
-                        for (int x = 0; x < XE-XB; ++x)
+#pragma omp simd aligned(s_row, m_row:64) reduction(+:f)
+                        for (int x = 0; x < XE - XB; ++x)
                             f += s_row[x] * m_row[x];
                     }
                 }
@@ -574,23 +463,23 @@ float simulator::getFilling(cint at_x, cint at_y, const vector<vectorized_matrix
                     // special case 2. Ideally vectorized. Access over bottom border. Tested
                     for (int y = YB; y < rules.get_space_height(); ++y)
                     {
-                        cfloat const * s_row = sim_space + y*sim_ld + XB;         // space row + x_start
-                        cfloat const * m_row = mask_space + (y - YB) * mask_ld;   // mask row
+                        cfloat const * s_row = sim_space + y * sim_ld + XB; // space row + x_start
+                        cfloat const * m_row = mask_space + (y - YB) * mask_ld; // mask row
                         assert(!(long(s_row) % ALIGNMENT || long(m_row) % ALIGNMENT));
-                        #pragma omp simd aligned(s_row, m_row:64) reduction(+:f)
-                        for (int x = 0; x < XE-XB; ++x)
+#pragma omp simd aligned(s_row, m_row:64) reduction(+:f)
+                        for (int x = 0; x < XE - XB; ++x)
                             f += s_row[x] * m_row[x];
                     }
-                    
-                    
-                    cint mask_y_off = rules.get_space_height() - YB;    // row offset caused by prior loop
+
+
+                    cint mask_y_off = rules.get_space_height() - YB; // row offset caused by prior loop
                     for (int y = 0; y < YE - rules.get_space_height(); ++y)
                     {
-                        cfloat const * s_row = sim_space + y*sim_ld + XB;         // space row + x_start
-                        cfloat const * m_row = mask_space + (y + mask_y_off) * mask_ld;   // mask row
+                        cfloat const * s_row = sim_space + y * sim_ld + XB; // space row + x_start
+                        cfloat const * m_row = mask_space + (y + mask_y_off) * mask_ld; // mask row
                         assert(!(long(s_row) % ALIGNMENT || long(m_row) % ALIGNMENT));
-                        #pragma omp simd aligned(s_row, m_row:64) reduction(+:f)
-                        for (int x = 0; x < XE-XB; ++x)
+#pragma omp simd aligned(s_row, m_row:64) reduction(+:f)
+                        for (int x = 0; x < XE - XB; ++x)
                             f += s_row[x] * m_row[x];
                     }
                 }
@@ -603,23 +492,23 @@ float simulator::getFilling(cint at_x, cint at_y, const vector<vectorized_matrix
                 cint mask_y_off = -YB;
                 for (int y = 0; y < YE; ++y)
                 {
-                    cfloat const * s_row = sim_space + y*sim_ld + XB;         // space row + x_start
-                    cfloat const * m_row = mask_space + (y + mask_y_off) * mask_ld;   // mask row
+                    cfloat const * s_row = sim_space + y * sim_ld + XB; // space row + x_start
+                    cfloat const * m_row = mask_space + (y + mask_y_off) * mask_ld; // mask row
                     assert(!(long(s_row) % ALIGNMENT || long(m_row) % ALIGNMENT));
-                    #pragma omp simd aligned(s_row, m_row:64) reduction(+:f)
-                    for (int x = 0; x < XE-XB; ++x)
+#pragma omp simd aligned(s_row, m_row:64) reduction(+:f)
+                    for (int x = 0; x < XE - XB; ++x)
                         f += s_row[x] * m_row[x];
                 }
 
-                
+
                 cint mask_y_off2 = rules.get_space_height() + YB;
                 for (int y = rules.get_space_height() + YB; y < rules.get_space_height(); ++y)
                 {
-                    cfloat const * s_row = sim_space + y*sim_ld + XB;         // space row + x_start
-                    cfloat const * m_row = mask_space + (y - mask_y_off2) * mask_ld;   // mask row
+                    cfloat const * s_row = sim_space + y * sim_ld + XB; // space row + x_start
+                    cfloat const * m_row = mask_space + (y - mask_y_off2) * mask_ld; // mask row
                     assert(!(long(s_row) % ALIGNMENT || long(m_row) % ALIGNMENT));
-                    #pragma omp simd aligned(s_row, m_row:64) reduction(+:f)
-                    for (int x = 0; x < XE-XB; ++x)
+#pragma omp simd aligned(s_row, m_row:64) reduction(+:f)
+                    for (int x = 0; x < XE - XB; ++x)
                         f += s_row[x] * m_row[x];
                 }
             }
@@ -630,22 +519,22 @@ float simulator::getFilling(cint at_x, cint at_y, const vector<vectorized_matrix
             for (int y = YB; y < YE; ++y)
             {
                 cfloat const * s_row = sim_space + XB + y*sim_ld;
-                cfloat const * m_row = mask_space + (y - YB) * mask_ld;   // mask row
+                cfloat const * m_row = mask_space + (y - YB) * mask_ld; // mask row
                 assert(!(long(s_row) % ALIGNMENT || long(m_row) % ALIGNMENT));
-                #pragma omp simd aligned(s_row, m_row:64) reduction(+:f)
+#pragma omp simd aligned(s_row, m_row:64) reduction(+:f)
                 for (int x = 0; x < rules.get_space_width() - XB; ++x)
                     f += s_row[x] * m_row[x];
             }
-            
-            
+
+
             cint mask_x_off = rules.get_space_width() - XB;
             for (int y = YB; y < YE; ++y)
             {
                 cfloat const * s_row = sim_space + y*sim_ld;
-                cfloat const * m_row = mask_space + mask_x_off + (y - YB) * mask_ld;   // mask row
+                cfloat const * m_row = mask_space + mask_x_off + (y - YB) * mask_ld; // mask row
                 assert(!(long(s_row) % ALIGNMENT || long(m_row) % ALIGNMENT));
-                #pragma omp simd aligned(s_row, m_row:64) reduction(+:f)
-                for (int x = 0; x < XE-rules.get_space_width(); ++x)
+#pragma omp simd aligned(s_row, m_row:64) reduction(+:f)
+                for (int x = 0; x < XE - rules.get_space_width(); ++x)
                     f += s_row[x] * m_row[x];
             }
         }
@@ -668,21 +557,21 @@ float simulator::getFilling(cint at_x, cint at_y, const vector<vectorized_matrix
         for (int y = YB; y < YE; ++y)
         {
             cfloat const * s_row = sim_space + y*sim_ld;
-            cfloat const * m_row = mask_space + mask_x_off + (y - YB) * mask_ld;   // mask row
+            cfloat const * m_row = mask_space + mask_x_off + (y - YB) * mask_ld; // mask row
             assert(!(long(s_row) % ALIGNMENT || long(m_row) % ALIGNMENT));
-            #pragma omp simd aligned(s_row, m_row:64) reduction(+:f)
+#pragma omp simd aligned(s_row, m_row:64) reduction(+:f)
             for (int x = 0; x < XE; ++x)
                 f += s_row[x] * m_row[x];
-                //f += sim_space[x + y*sim_ld] * mask_space[x + mask_x_off + (y - YB) * mask_ld];
+            //f += sim_space[x + y*sim_ld] * mask_space[x + mask_x_off + (y - YB) * mask_ld];
         }
-        
+
         // wrapped part. we are on the right now
         for (int y = YB; y < YE; ++y)
         {
-            cfloat const * s_row = sim_space + y*sim_ld + rules.get_space_width() + XB;
-            cfloat const * m_row = mask_space + (y - YB) * mask_ld;   // mask row
+            cfloat const * s_row = sim_space + y * sim_ld + rules.get_space_width() + XB;
+            cfloat const * m_row = mask_space + (y - YB) * mask_ld; // mask row
             assert(!(long(s_row) % ALIGNMENT || long(m_row) % ALIGNMENT));
-            #pragma omp simd aligned(s_row, m_row:64) reduction(+:f)
+#pragma omp simd aligned(s_row, m_row:64) reduction(+:f)
             for (int x = 0; x < -XB; ++x)
                 //f += sim_space[x + y*sim_ld + rules.get_space_width() + XB] * mask_space[x + (y - YB) * mask_ld];
                 f += s_row[x] * m_row[x];
@@ -703,7 +592,6 @@ float simulator::getFilling(cint at_x, cint at_y, const vector<vectorized_matrix
 
     return f / mask_sum; // normalize f
 }
-
 
 float simulator::getFilling_peeled(cint at_x, cint at_y, const vector<vectorized_matrix<float>> &masks, cint offset, cfloat mask_sum)
 {
@@ -878,7 +766,6 @@ float simulator::getFilling_peeled(cint at_x, cint at_y, const vector<vectorized
 
     return f / mask_sum; // normalize f
 }
-
 
 float simulator::getFilling_unoptimized(cint at_x, cint at_y, const vectorized_matrix<float> &mask, cfloat mask_sum)
 {
