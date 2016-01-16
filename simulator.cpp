@@ -398,14 +398,23 @@ void simulator::run_simulation_master()
                 perf_time_start = chrono::high_resolution_clock::now();
             }
         }
-        
+
         //Try to push into queue
-        while(!space->push()) {}
-        
+        if (!APP_PERFTEST)
+        {
+            while (running && !space->push())
+            {
+            }
+        }
+        else
+        {
+            space->swap();
+        }
+
         //Send status signal
-        int communication_status =  running ? APP_COMMUNICATION_RUNNING : 0;
-        
-        for(mpi_dual_connection<int> & conn : communication_connections)
+        int communication_status = running ? APP_COMMUNICATION_RUNNING : 0;
+
+        for (mpi_dual_connection<int> & conn : communication_connections)
         {
             conn.get_buffer_send()->data()[0] = communication_status;
             conn.flush();
