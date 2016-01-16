@@ -164,6 +164,7 @@ void simulator::simulate_step(int x_start, int w)
             //Calculate the new state based on fillings n and m
             //Smooth state function must be clamped to [0,1] (this is also done by author's implementation!)
             space_next->setValue(rules.get_is_discrete() ? discrete_state_func_1(n, m) : fmax(0, fmin(1, next_step_as_euler(x, y, n, m))), x, y);
+            //space_next->setValue(space_current->getValue(x,y),x,y);
         }
     }
 
@@ -226,7 +227,7 @@ void simulator::run_simulation_slave()
                                  get_mpi_chunk_width(),
                                  rules.get_space_width()); //Overwrite main space
 
-    space_current->raw_overwrite(buffer_space.data(),
+    /*space_current->raw_overwrite(buffer_space.data(),
                                  get_mpi_chunk_index(left_rank) * get_mpi_chunk_width() + get_mpi_chunk_width() - get_mpi_chunk_border_width(),
                                  0,
                                  get_mpi_chunk_border_width(),
@@ -236,25 +237,40 @@ void simulator::run_simulation_slave()
                                  get_mpi_chunk_index(right_rank) * get_mpi_chunk_width(),
                                  get_mpi_chunk_border_width() + get_mpi_chunk_width(),
                                  get_mpi_chunk_border_width(),
-                                 rules.get_space_width()); //Overwrite right border with left border of right rank
+                                 rules.get_space_width()); //Overwrite right border with left border of right rank*/
 
     running = true;
 
     while (running)
     {
         //Synchronize borders if not the first time
-        if (spacetime != 0)
+        //if (spacetime != 0)
         {
             if (left_rank != 0)
-                space_next->raw_copy_to(border_left_connection.get_buffer_send()->data(), get_mpi_chunk_border_width(), get_mpi_chunk_border_width());
+            {
+                space_current->raw_copy_to(border_left_connection.get_buffer_send()->data(), get_mpi_chunk_width(), get_mpi_chunk_border_width());
+                border_left_connection.sendrecv();
+            }
+            else
+            {
+                border_left_connection.recv();
+            }
+            
             if (right_rank != 0)
-                space_next->raw_copy_to(border_right_connection.get_buffer_send()->data(), get_mpi_chunk_width(), get_mpi_chunk_border_width());
+            {
+                space_current->raw_copy_to(border_right_connection.get_buffer_send()->data(), get_mpi_chunk_border_width(), get_mpi_chunk_border_width());
+                border_right_connection.sendrecv();
+            } 
+            else
+            {
+                border_right_connection.recv();
+            }
+            
+            //space_current->raw_overwrite(border_right_connection.get_buffer_recieve()->data(), get_mpi_chunk_border_width(), get_mpi_chunk_border_width());
+            //space_current->raw_overwrite(border_left_connection.get_buffer_recieve()->data(), get_mpi_chunk_border_width() + get_mpi_chunk_width() - get_mpi_chunk_border_width(), get_mpi_chunk_border_width());
 
-            border_left_connection.flush();
-            border_right_connection.flush();
-
-            space_current->raw_overwrite(border_left_connection.get_buffer_recieve()->data(), 0, get_mpi_chunk_border_width()); //Overwrite left border with border provided by left rank
-            space_current->raw_overwrite(border_right_connection.get_buffer_recieve()->data(), get_mpi_chunk_border_width() + get_mpi_chunk_width(), get_mpi_chunk_border_width()); //Overwrite right border with border provided by right rank
+            space_current->raw_overwrite(border_right_connection.get_buffer_recieve()->data(), 0, get_mpi_chunk_border_width());
+            space_current->raw_overwrite(border_left_connection.get_buffer_recieve()->data(), get_mpi_chunk_border_width() + get_mpi_chunk_width(), get_mpi_chunk_border_width());
         }
 
         /**
@@ -266,12 +282,12 @@ void simulator::run_simulation_slave()
 
         //Copy the complete field into the space buffer and the borders into their respective buffers
         space_next->raw_copy_to(space_connection.get_buffer_send()->data(), get_mpi_chunk_border_width(), get_mpi_chunk_width());
-        space_connection.flush();
+        space_connection.send();    
 
         space->swap(); //The queue is disabled, use swap which yields greater performance
 
         //Update communication signal
-        communication_connection.flush();
+        communication_connection.recv();
         running = communication_connection.get_buffer_recieve()->data()[0] & APP_COMMUNICATION_RUNNING == APP_COMMUNICATION_RUNNING;
     }
 
@@ -342,7 +358,7 @@ void simulator::run_simulation_master()
 
     while (running)
     {
-        if (spacetime != 0)
+        //if (spacetime != 0)
         {
             if (left_rank != 0)
             {
@@ -351,9 +367,9 @@ void simulator::run_simulation_master()
                  */
                 int chunk_index = get_mpi_chunk_index();
                 int border_start = chunk_index * get_mpi_chunk_width();
-                space_next->raw_copy_to(border_left_connection.get_buffer_send()->data(), border_start, get_mpi_chunk_border_width());
-
-                border_left_connection.flush();
+                space_current->raw_copy_to(border_left_connection.get_buffer_send()->data(), border_start, get_mpi_chunk_border_width());
+                
+                border_left_connection.send();
             }
             if (right_rank != 0)
             {
@@ -362,9 +378,9 @@ void simulator::run_simulation_master()
                  */
                 int chunk_index = get_mpi_chunk_index();
                 int border_start = (chunk_index + 1) * get_mpi_chunk_width() - get_mpi_chunk_border_width();
-                space_next->raw_copy_to(border_right_connection.get_buffer_send()->data(), border_start, get_mpi_chunk_border_width());
-
-                border_right_connection.flush();
+                space_current->raw_copy_to(border_right_connection.get_buffer_send()->data(), border_start, get_mpi_chunk_border_width());
+              
+                border_right_connection.send();
             }
         }
 
@@ -379,10 +395,10 @@ void simulator::run_simulation_master()
 
         for (mpi_dual_connection<float> & conn : space_connections)
         {
-            conn.flush();
+            conn.recv();
 
             int chunk_index = get_mpi_chunk_index(conn.get_other_rank());
-            space_next->raw_overwrite(conn.get_buffer_recieve()->data(), chunk_index * get_mpi_chunk_width(), get_mpi_chunk_width());
+            space_next->raw_overwrite(conn.get_buffer_recieve()->data(), chunk_index * get_mpi_chunk_width(), get_mpi_chunk_width());  
         }
 
         if (ENABLE_PERF_MEASUREMENT)
@@ -417,7 +433,7 @@ void simulator::run_simulation_master()
         for (mpi_dual_connection<int> & conn : communication_connections)
         {
             conn.get_buffer_send()->data()[0] = communication_status;
-            conn.flush();
+            conn.send();
         }
     }
 }

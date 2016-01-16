@@ -53,15 +53,16 @@ public:
     {
         return &buffer_recieve;
     }
-
-    /**
-     * @brief Sends the data to reciever if sender; Accept new connection if reciever
-     */
-    void flush()
+    
+    void sendrecv()
     {
-        if (is_sender && is_reciever)
+		if (!is_sender || !is_reciever)
         {
-            MPI_Sendrecv(buffer_send.data(),
+			cerr << "mpi_dual_connection: for sendrecv the connection must be sender and reciever!" << endl;
+			exit(EXIT_FAILURE);
+		}
+		
+		MPI_Sendrecv(buffer_send.data(),
                          buffer_send.size(),
                          datatype,
                          other_rank,
@@ -73,33 +74,41 @@ public:
                          mpi_tag,
                          MPI_COMM_WORLD,
                          MPI_STATUS_IGNORE);
-        }
-        else if (is_sender)
+	}
+	
+	void recv()
+	{
+		if (is_sender || !is_reciever)
         {
-            MPI_Send(buffer_send.data(),
-                     buffer_send.size(),
-                     datatype,
-                     other_rank,
-                     mpi_tag,
-                     MPI_COMM_WORLD);
-        }
-        else if (is_reciever)
-        {
-            MPI_Recv(buffer_recieve.data(),
+			cerr << "mpi_dual_connection: for recv the connection must only reciever!" << endl;
+			exit(EXIT_FAILURE);
+		}
+		
+		MPI_Recv(buffer_recieve.data(),
                      buffer_recieve.size(),
                      datatype,
                      other_rank,
                      mpi_tag,
                      MPI_COMM_WORLD,
                      MPI_STATUS_IGNORE);
-        }
-        else
+	}
+	
+	void send()
+	{
+		if (!is_sender || is_reciever)
         {
-            cerr << "mpi_dual_connection that is no sender and no reciever ?!" << endl;
-            exit(EXIT_FAILURE);
-        }
-    }
-
+			cerr << "mpi_dual_connection: for send the connection must only sender!" << endl;
+			exit(EXIT_FAILURE);
+		}
+		
+		MPI_Send(buffer_send.data(),
+                     buffer_send.size(),
+                     datatype,
+                     other_rank,
+                     mpi_tag,
+                     MPI_COMM_WORLD);
+	}
+   
     int get_other_rank()
     {
         return other_rank;
