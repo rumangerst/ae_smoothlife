@@ -62,6 +62,8 @@ public:
 			exit(EXIT_FAILURE);
 		}
 		
+		//cout << mpi_rank() << " sendrecv " << buffer_send.size() << " between " << other_rank << " with " << mpi_tag << endl;
+		
 		MPI_Sendrecv(buffer_send.data(),
                          buffer_send.size(),
                          datatype,
@@ -74,6 +76,10 @@ public:
                          mpi_tag,
                          MPI_COMM_WORLD,
                          MPI_STATUS_IGNORE);
+        
+                         
+        //cout << mpi_rank() << " finished sendrecv " << buffer_send.size() << " between " << other_rank << " with " << mpi_tag << endl;                 
+        
 	}
 	
 	void recv()
@@ -84,6 +90,8 @@ public:
 			exit(EXIT_FAILURE);
 		}
 		
+		//cout << mpi_rank() << " recieves " << buffer_recieve.size() << " from " << other_rank << " with " << mpi_tag << endl;
+		
 		MPI_Recv(buffer_recieve.data(),
                      buffer_recieve.size(),
                      datatype,
@@ -91,6 +99,7 @@ public:
                      mpi_tag,
                      MPI_COMM_WORLD,
                      MPI_STATUS_IGNORE);
+        //cout << mpi_rank() << " finished recieve " << buffer_recieve.size() << " from " << other_rank << " with " << mpi_tag << endl;
 	}
 	
 	void send()
@@ -101,18 +110,30 @@ public:
 			exit(EXIT_FAILURE);
 		}
 		
-		MPI_Send(buffer_send.data(),
+		//cout << mpi_rank() << " sends " << buffer_send.size() << " to " << other_rank << " with " << mpi_tag << endl;
+		MPI_Ssend(buffer_send.data(),
                      buffer_send.size(),
                      datatype,
                      other_rank,
                      mpi_tag,
                      MPI_COMM_WORLD);
+        //cout << mpi_rank() << " finished send " << buffer_send.size() << " to " << other_rank << " with " << mpi_tag << endl;
 	}
    
     int get_other_rank()
     {
         return other_rank;
     }
+    
+    bool get_is_sender()
+    {
+		return is_sender;
+	}
+	
+	bool get_is_reciever()
+	{
+		return is_reciever;
+	}
 
 private:
 

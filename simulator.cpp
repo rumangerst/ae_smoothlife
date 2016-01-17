@@ -164,7 +164,6 @@ void simulator::simulate_step(int x_start, int w)
             //Calculate the new state based on fillings n and m
             //Smooth state function must be clamped to [0,1] (this is also done by author's implementation!)
             space_next->setValue(rules.get_is_discrete() ? discrete_state_func_1(n, m) : fmax(0, fmin(1, next_step_as_euler(x, y, n, m))), x, y);
-            //space_next->setValue(space_current->getValue(x,y),x,y);
         }
     }
 
@@ -201,22 +200,29 @@ void simulator::run_simulation_slave()
     // The slave has connections to the left and right rank
     int left_rank = matrix_index_wrapped(mpi_rank() - 1, 1, mpi_comm_size(), 1, mpi_comm_size());
     int right_rank = matrix_index_wrapped(mpi_rank() + 1, 1, mpi_comm_size(), 1, mpi_comm_size());
+    
+    // We use these border ids as tags for border synchronization. Each border gets it's ID, so no confusion happens
+    int border_left_tag = matrix_index_wrapped(get_mpi_chunk_index(), 1, mpi_comm_size(), 1, mpi_comm_size()) + APP_MPI_TAG_BORDER_RANGE;
+    int border_right_tag = matrix_index_wrapped(get_mpi_chunk_index() + 1, 1, mpi_comm_size(), 1, mpi_comm_size()) + APP_MPI_TAG_BORDER_RANGE;
 
     mpi_dual_connection<float> border_left_connection = mpi_dual_connection<float>(
             left_rank,
             left_rank != 0,
             true,
-            APP_MPI_TAG_BORDER_LEFT,
+            border_left_tag,
             rules.get_space_height() * get_mpi_chunk_border_width(),
             MPI_FLOAT);
     mpi_dual_connection<float> border_right_connection = mpi_dual_connection<float>(
             right_rank,
             right_rank != 0,
             true,
-            APP_MPI_TAG_BORDER_RIGHT,
+            border_right_tag,
             rules.get_space_height() * get_mpi_chunk_border_width(),
             MPI_FLOAT);
-
+            
+    MPI_Barrier(MPI_COMM_WORLD);
+    sleep(get_mpi_chunk_index());   
+    
     // Use broadcast to obtain the initial space from master
     vector<float> buffer_space = vector<float>(rules.get_space_width() * rules.get_space_height());
     MPI_Bcast(buffer_space.data(), rules.get_space_width() * rules.get_space_height(), MPI_FLOAT, 0, MPI_COMM_WORLD);
@@ -238,37 +244,38 @@ void simulator::run_simulation_slave()
                                  get_mpi_chunk_border_width() + get_mpi_chunk_width(),
                                  get_mpi_chunk_border_width(),
                                  rules.get_space_width()); //Overwrite right border with left border of right rank*/
+                                 
+                           
 
     running = true;
 
     while (running)
     {
+        
 
         if (left_rank != 0)
         {
-            space_current->raw_copy_to(border_left_connection.get_buffer_send()->data(), get_mpi_chunk_width(), get_mpi_chunk_border_width());
+            space_current->raw_copy_to(border_left_connection.get_buffer_send()->data(), get_mpi_chunk_border_width(), get_mpi_chunk_border_width()); 
             border_left_connection.sendrecv();
         }
         else
         {
             border_left_connection.recv();
         }
-
+        
         if (right_rank != 0)
         {
-            space_current->raw_copy_to(border_right_connection.get_buffer_send()->data(), get_mpi_chunk_border_width(), get_mpi_chunk_border_width());
+            space_current->raw_copy_to(border_right_connection.get_buffer_send()->data(), get_mpi_chunk_width(), get_mpi_chunk_border_width());
             border_right_connection.sendrecv();
         }
         else
         {
             border_right_connection.recv();
-        }
-
-        //space_current->raw_overwrite(border_right_connection.get_buffer_recieve()->data(), get_mpi_chunk_border_width(), get_mpi_chunk_border_width());
-        //space_current->raw_overwrite(border_left_connection.get_buffer_recieve()->data(), get_mpi_chunk_border_width() + get_mpi_chunk_width() - get_mpi_chunk_border_width(), get_mpi_chunk_border_width());
-
-        space_current->raw_overwrite(border_right_connection.get_buffer_recieve()->data(), 0, get_mpi_chunk_border_width());
-        space_current->raw_overwrite(border_left_connection.get_buffer_recieve()->data(), get_mpi_chunk_border_width() + get_mpi_chunk_width(), get_mpi_chunk_border_width());
+        }       
+      
+        
+        space_current->raw_overwrite(border_left_connection.get_buffer_recieve()->data(), 0, get_mpi_chunk_border_width());
+        space_current->raw_overwrite(border_right_connection.get_buffer_recieve()->data(), get_mpi_chunk_border_width() + get_mpi_chunk_width(), get_mpi_chunk_border_width());
 
         /**
          * The slave simulator only has to simulate one chunk. So we call simulate_step with this size.
@@ -331,19 +338,23 @@ void simulator::run_simulation_master()
     // The master has connections to the left and right rank to synchronize borders
     int left_rank = matrix_index_wrapped(mpi_rank() - 1, 1, mpi_comm_size(), 1, mpi_comm_size());
     int right_rank = matrix_index_wrapped(mpi_rank() + 1, 1, mpi_comm_size(), 1, mpi_comm_size());
+    
+    // We use these border ids as tags for border synchronization. Each border gets it's ID, so no confusion happens
+    int border_left_tag = matrix_index_wrapped(get_mpi_chunk_index(), 1, mpi_comm_size(), 1, mpi_comm_size()) + APP_MPI_TAG_BORDER_RANGE;
+    int border_right_tag = matrix_index_wrapped(get_mpi_chunk_index() + 1, 1, mpi_comm_size(), 1, mpi_comm_size()) + APP_MPI_TAG_BORDER_RANGE;
 
     mpi_dual_connection<float> border_left_connection = mpi_dual_connection<float>(
             left_rank,
             true,
             false,
-            APP_MPI_TAG_BORDER_LEFT,
+            border_left_tag,
             rules.get_space_height() * get_mpi_chunk_border_width(),
             MPI_FLOAT);
     mpi_dual_connection<float> border_right_connection = mpi_dual_connection<float>(
             right_rank,
             true,
             false,
-            APP_MPI_TAG_BORDER_RIGHT,
+            border_right_tag,
             rules.get_space_height() * get_mpi_chunk_border_width(),
             MPI_FLOAT);
 
@@ -351,21 +362,11 @@ void simulator::run_simulation_master()
     vector<float> buffer_space = vector<float>(rules.get_space_width() * rules.get_space_height());
     space->buffer_read_ptr()->raw_copy_to(buffer_space.data());
     MPI_Bcast(buffer_space.data(), rules.get_space_width() * rules.get_space_height(), MPI_FLOAT, 0, MPI_COMM_WORLD);
-
+    
+    MPI_Barrier(MPI_COMM_WORLD);
 
     while (running)
     {
-        if (left_rank != 0)
-        {
-            /*
-             * We want the left border. It starts at chunk_index * chunk_width
-             */
-            int chunk_index = get_mpi_chunk_index();
-            int border_start = chunk_index * get_mpi_chunk_width();
-            space_current->raw_copy_to(border_left_connection.get_buffer_send()->data(), border_start, get_mpi_chunk_border_width());
-
-            border_left_connection.send();
-        }
         if (right_rank != 0)
         {
             /**
@@ -376,6 +377,17 @@ void simulator::run_simulation_master()
             space_current->raw_copy_to(border_right_connection.get_buffer_send()->data(), border_start, get_mpi_chunk_border_width());
 
             border_right_connection.send();
+        }
+        if (left_rank != 0)
+        {
+            /**
+             * We want the left border. It starts at chunk_index * chunk_width
+             */
+            int chunk_index = get_mpi_chunk_index();
+            int border_start = chunk_index * get_mpi_chunk_width();
+            space_current->raw_copy_to(border_left_connection.get_buffer_send()->data(), border_start, get_mpi_chunk_border_width());
+
+            border_left_connection.send();
         }
 
         /**

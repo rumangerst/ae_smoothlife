@@ -8,8 +8,8 @@ using namespace std;
  */
 #define APP_MPI_TAG_COMMUNICATION 1 // Used for status communication
 #define APP_MPI_TAG_SPACE 2 // Complete space
-#define APP_MPI_TAG_BORDER_LEFT 4 //Left border
-#define APP_MPI_TAG_BORDER_RIGHT 8 //Right border
+#define APP_MPI_TAG_BORDER_RANGE 100 //Begin of border tag
+
 
 /**
  * Defines relevant for application communication channel

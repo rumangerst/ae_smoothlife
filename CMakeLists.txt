@@ -88,6 +88,7 @@ add_executable(smoothlife_tests ${SOURCES_TESTS} ${SOURCES_SIM})
 
 if(BUILD_INTEL AND BUILD_MIC)
   add_executable(smoothlife.mic main.cpp ${SOURCES_SIM})
+  add_executable(smoothlife_perftest.mic main.cpp ${SOURCES_SIM})
 endif()
 
 # smoothlife_ui is determined by #ifdef GUI
@@ -105,6 +106,8 @@ target_link_libraries(smoothlife_tests ${Boost_LIBRARIES})
 if(BUILD_INTEL AND BUILD_MIC)
   set_target_properties(smoothlife.mic PROPERTIES LINK_FLAGS "-mmic" COMPILE_FLAGS "-DAPP_SIM=true -DAPP_GUI=false -DAPP_PERFTEST=false -mmic -DAPP_UNIT_TEST=false")
   target_link_libraries(smoothlife.mic ${Boost_LIBRARIES})
+  set_target_properties(smoothlife_perftest.mic PROPERTIES LINK_FLAGS "-mmic" COMPILE_FLAGS "-DAPP_SIM=true -DAPP_GUI=false -DAPP_PERFTEST=true -mmic -DAPP_UNIT_TEST=false")
+  target_link_libraries(smoothlife_perftest.mic ${Boost_LIBRARIES})
 endif()
 
 #Adding test to cmake

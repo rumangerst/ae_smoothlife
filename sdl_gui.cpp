@@ -65,7 +65,7 @@ void sdl_gui::update( bool& running )
 
 void sdl_gui::render()
 {
-    SDL_SetRenderDrawColor(renderer, 0,0,0,255);
+    SDL_SetRenderDrawColor(renderer, 0,100,200,255);
     SDL_RenderClear(renderer);
 
     //TODO: optimize access via synchronization & de-coupling
