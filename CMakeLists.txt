@@ -103,7 +103,7 @@ set_target_properties(smoothlife_tests PROPERTIES COMPILE_FLAGS "-xhost -DAPP_SI
 target_link_libraries(smoothlife_tests ${Boost_LIBRARIES})
 
 if(BUILD_INTEL AND BUILD_MIC)
-  set_target_properties(smoothlife_mpi_mic PROPERTIES COMPILE_FLAGS "-DAPP_SIM=true -DAPP_GUI=false -DAPP_PERFTEST=false -mmic -DAPP_UNIT_TEST=false")
+  set_target_properties(smoothlife_mpi_mic PROPERTIES LINK_FLAGS "-mmic" COMPILE_FLAGS "-DAPP_SIM=true -DAPP_GUI=false -DAPP_PERFTEST=false -mmic -DAPP_UNIT_TEST=false")
   target_link_libraries(smoothlife_mpi_mic ${Boost_LIBRARIES})
 endif()
 
