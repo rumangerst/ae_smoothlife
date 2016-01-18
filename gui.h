@@ -42,7 +42,8 @@ public:
         while (running)
         {
             // Try to pop queue to current space
-            sim->space->pop(space);
+            if(sim->space->pop(space))
+                ++spacetime;
 
             update(running);
             render();
@@ -80,9 +81,14 @@ protected:
     virtual bool initialize() = 0;
     virtual void update(bool & running) = 0;
     virtual void render() = 0;
+    
+    int get_spacetime()
+    {
+        return spacetime;
+    }
 
 private:
-
+    ulong spacetime = 0;
     bool running = false;
 
 #ifdef ENABLE_PERF_MEASUREMENT

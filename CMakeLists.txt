@@ -31,11 +31,7 @@ set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O3 -DNDEBUG -g")
 set(CMAKE_CXX_FLAGS_MINSIZEREL "-Os -DNDEBUG")
 
 set(SOURCES_SIM
-simulator.cpp
-matrix.h
-aligned_vector.h
-ruleset.h
-mpi_manager.h)
+simulator.cpp)
 
 set(SOURCES_TESTS
 test_main.cpp)

@@ -4,7 +4,7 @@
 #include <omp.h>
 #include <memory>
 #include <exception>
-#include "mpi_manager.h"
+#include "communication.h"
 #include "simulator.h"
 
 // Include the GUI headers if this is the GUI

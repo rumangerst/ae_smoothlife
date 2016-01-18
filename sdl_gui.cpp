@@ -67,22 +67,34 @@ void sdl_gui::render()
 {
     SDL_SetRenderDrawColor(renderer, 0,100,200,255);
     SDL_RenderClear(renderer);
-
-    //TODO: optimize access via synchronization & de-coupling
-
-    for(int x = 0; x < space.getNumCols(); ++x)
+    
+     // How many points are needed?
+    int wnd_w;
+    int wnd_h;
+    SDL_GetWindowSize ( window, &wnd_w, &wnd_h );
+    float factor = fmax(1, fmin((float)wnd_w / space.getNumCols(), (float)wnd_h / space.getNumRows()));
+    
+    int render_w = floor(factor * space.getNumCols());
+    int render_h = floor(factor * space.getNumRows());   
+    
+    for(int y = 0; y < render_h; ++y)
     {
-        for(int y = 0; y < space.getNumRows(); ++y)
+        float * row = space.getRow_ptr(floor(y / factor));
+        
+        for(int x = 0; x < render_w; ++x)
         {
-            const double f = space.getValue(x,y);
-
+            int x_idx = floor(x / factor);
+            float f = row[x_idx];
             Uint8 a = (int)ceil(f * 255);
-
+            
+            int x_render = wnd_w / 2 - render_w / 2 + x;
+            int y_render = wnd_h / 2 - render_h / 2 + y;
+            
             SDL_SetRenderDrawColor(renderer, a,a,a,255);
-            SDL_RenderDrawPoint(renderer, x, y);
+            SDL_RenderDrawPoint(renderer, x_render, y_render);            
         }
     }
-
+    
     SDL_RenderPresent(renderer);
 }
 

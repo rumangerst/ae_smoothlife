@@ -5,6 +5,7 @@
 #include <vector>
 #include <SDL2/SDL.h>
 #include <memory>
+#include <math.h>
 #include "simulator.h"
 #include "gui.h"
 
@@ -29,7 +30,7 @@ protected:
   void update(bool & running) override;
   void render() override;
     
-private:
+private:   
 
     SDL_Window* window = nullptr;
     SDL_Renderer* renderer = nullptr;

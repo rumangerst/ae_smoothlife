@@ -5,7 +5,7 @@
 #include <math.h>
 #include "aligned_vector.h"
 #include <assert.h>
-#include "mpi_manager.h"
+#include "communication.h"
 
 /*
  * DONE:
