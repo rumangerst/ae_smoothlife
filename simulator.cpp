@@ -200,7 +200,7 @@ void simulator::run_simulation_slave()
     // The slave has connections to the left and right rank
     int left_rank = matrix_index_wrapped(mpi_rank() - 1, 1, mpi_comm_size(), 1, mpi_comm_size());
     int right_rank = matrix_index_wrapped(mpi_rank() + 1, 1, mpi_comm_size(), 1, mpi_comm_size());
-    
+
     // We use these border ids as tags for border synchronization. Each border gets it's ID, so no confusion happens
     int border_left_tag = matrix_index_wrapped(get_mpi_chunk_index(), 1, mpi_comm_size(), 1, mpi_comm_size()) + APP_MPI_TAG_BORDER_RANGE;
     int border_right_tag = matrix_index_wrapped(get_mpi_chunk_index() + 1, 1, mpi_comm_size(), 1, mpi_comm_size()) + APP_MPI_TAG_BORDER_RANGE;
@@ -219,9 +219,7 @@ void simulator::run_simulation_slave()
             border_right_tag,
             rules.get_space_height() * get_mpi_chunk_border_width(),
             MPI_FLOAT);
-            
-    MPI_Barrier(MPI_COMM_WORLD);
-    sleep(get_mpi_chunk_index());   
+
     
     // Use broadcast to obtain the initial space from master
     vector<float> buffer_space = vector<float>(rules.get_space_width() * rules.get_space_height());
@@ -232,6 +230,7 @@ void simulator::run_simulation_slave()
                                  get_mpi_chunk_border_width(),
                                  get_mpi_chunk_width(),
                                  rules.get_space_width()); //Overwrite main space
+    MPI_Barrier(MPI_COMM_WORLD);   
 
     /*space_current->raw_overwrite(buffer_space.data(),
                                  get_mpi_chunk_index(left_rank) * get_mpi_chunk_width() + get_mpi_chunk_width() - get_mpi_chunk_border_width(),
@@ -244,25 +243,36 @@ void simulator::run_simulation_slave()
                                  get_mpi_chunk_border_width() + get_mpi_chunk_width(),
                                  get_mpi_chunk_border_width(),
                                  rules.get_space_width()); //Overwrite right border with left border of right rank*/
-                                 
-                           
+
+
 
     running = true;
 
     while (running)
     {
-        
+        if (reinitialize)
+        {
+            MPI_Bcast(buffer_space.data(), rules.get_space_width() * rules.get_space_height(), MPI_FLOAT, 0, MPI_COMM_WORLD);
+
+            space_current->raw_overwrite(buffer_space.data(),
+                                         get_mpi_chunk_index() * get_mpi_chunk_width(),
+                                         get_mpi_chunk_border_width(),
+                                         get_mpi_chunk_width(),
+                                         rules.get_space_width()); //Overwrite main space
+            this->reinitialize = false;
+            MPI_Barrier(MPI_COMM_WORLD);   
+        }
 
         if (left_rank != 0)
         {
-            space_current->raw_copy_to(border_left_connection.get_buffer_send()->data(), get_mpi_chunk_border_width(), get_mpi_chunk_border_width()); 
+            space_current->raw_copy_to(border_left_connection.get_buffer_send()->data(), get_mpi_chunk_border_width(), get_mpi_chunk_border_width());
             border_left_connection.sendrecv();
         }
         else
         {
             border_left_connection.recv();
         }
-        
+
         if (right_rank != 0)
         {
             space_current->raw_copy_to(border_right_connection.get_buffer_send()->data(), get_mpi_chunk_width(), get_mpi_chunk_border_width());
@@ -271,9 +281,9 @@ void simulator::run_simulation_slave()
         else
         {
             border_right_connection.recv();
-        }       
-      
-        
+        }
+
+
         space_current->raw_overwrite(border_left_connection.get_buffer_recieve()->data(), 0, get_mpi_chunk_border_width());
         space_current->raw_overwrite(border_right_connection.get_buffer_recieve()->data(), get_mpi_chunk_border_width() + get_mpi_chunk_width(), get_mpi_chunk_border_width());
 
@@ -293,6 +303,7 @@ void simulator::run_simulation_slave()
         //Update communication signal
         communication_connection.recv();
         running = communication_connection.get_buffer_recieve()->data()[0] & APP_COMMUNICATION_RUNNING == APP_COMMUNICATION_RUNNING;
+        reinitialize = communication_connection.get_buffer_recieve()->data()[0] & APP_COMMUNICATION_REINITIALIZE == APP_COMMUNICATION_REINITIALIZE;
     }
 
     cout << "Simulator | Slave shut down." << endl;
@@ -338,7 +349,7 @@ void simulator::run_simulation_master()
     // The master has connections to the left and right rank to synchronize borders
     int left_rank = matrix_index_wrapped(mpi_rank() - 1, 1, mpi_comm_size(), 1, mpi_comm_size());
     int right_rank = matrix_index_wrapped(mpi_rank() + 1, 1, mpi_comm_size(), 1, mpi_comm_size());
-    
+
     // We use these border ids as tags for border synchronization. Each border gets it's ID, so no confusion happens
     int border_left_tag = matrix_index_wrapped(get_mpi_chunk_index(), 1, mpi_comm_size(), 1, mpi_comm_size()) + APP_MPI_TAG_BORDER_RANGE;
     int border_right_tag = matrix_index_wrapped(get_mpi_chunk_index() + 1, 1, mpi_comm_size(), 1, mpi_comm_size()) + APP_MPI_TAG_BORDER_RANGE;
@@ -362,11 +373,24 @@ void simulator::run_simulation_master()
     vector<float> buffer_space = vector<float>(rules.get_space_width() * rules.get_space_height());
     space->buffer_read_ptr()->raw_copy_to(buffer_space.data());
     MPI_Bcast(buffer_space.data(), rules.get_space_width() * rules.get_space_height(), MPI_FLOAT, 0, MPI_COMM_WORLD);
-    
+
     MPI_Barrier(MPI_COMM_WORLD);
 
     while (running)
     {
+        if (reinitialize)
+        {
+            SIMULATOR_INITIALIZATION_FUNCTION(space_current);
+            reinitialize = false;
+
+            //Resend the field if reinitialization was triggered
+            vector<float> buffer_space = vector<float>(rules.get_space_width() * rules.get_space_height());
+            space->buffer_read_ptr()->raw_copy_to(buffer_space.data());
+            MPI_Bcast(buffer_space.data(), rules.get_space_width() * rules.get_space_height(), MPI_FLOAT, 0, MPI_COMM_WORLD);
+
+            MPI_Barrier(MPI_COMM_WORLD);
+        }
+
         if (right_rank != 0)
         {
             /**
@@ -434,7 +458,12 @@ void simulator::run_simulation_master()
         }
 
         //Send status signal
-        int communication_status = running ? APP_COMMUNICATION_RUNNING : 0;
+        int communication_status = 0;
+
+        if (running)
+            communication_status |= APP_COMMUNICATION_RUNNING;
+        if (reinitialize)
+            communication_status |= APP_COMMUNICATION_REINITIALIZE;
 
         for (mpi_dual_connection<int> & conn : communication_connections)
         {

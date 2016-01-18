@@ -45,7 +45,7 @@ public:
             if(sim->space->pop(space))
                 ++spacetime;
 
-            update(running);
+            update(running, sim->reinitialize);
             render();
 
 #ifdef ENABLE_PERF_MEASUREMENT
@@ -79,7 +79,7 @@ protected:
      * @return true if initialization was successful, otherwise false
      */
     virtual bool initialize() = 0;
-    virtual void update(bool & running) = 0;
+    virtual void update(bool & running, bool & reinitialize) = 0;
     virtual void render() = 0;
     
     int get_spacetime()

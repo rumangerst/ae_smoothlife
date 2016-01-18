@@ -17,6 +17,7 @@ using namespace std;
  * Defines relevant for application communication channel
  */
 #define APP_COMMUNICATION_RUNNING 1 // The "running" signal sent by GUI
+#define APP_COMMUNICATION_REINITIALIZE 2 //Sent by master for reinitialization command
 
 enum mpi_role
 {

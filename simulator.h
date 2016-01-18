@@ -53,6 +53,7 @@ public:
 
     bool initialized = false;
     bool running = false;
+    bool reinitialize = false;
     bool optimize = true; //use the optimized methods    
 
 

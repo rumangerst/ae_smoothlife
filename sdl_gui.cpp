@@ -50,7 +50,7 @@ bool sdl_gui::initialize()
     return true;
 }
 
-void sdl_gui::update( bool& running )
+void sdl_gui::update( bool& running, bool & reinitialize )
 {
   SDL_Event e;
   
@@ -60,6 +60,15 @@ void sdl_gui::update( bool& running )
       {
 	        running = false;
       }
+      else if (e.type == SDL_KEYUP)
+        {
+            switch (e.key.keysym.sym)
+            {            
+            case SDLK_r:
+                reinitialize = true;
+                break;
+            }
+        }
   }
 }
 

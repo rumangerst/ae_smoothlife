@@ -27,7 +27,7 @@ public:
 protected:
   
   bool initialize() override;
-  void update(bool & running) override;
+  void update(bool & running, bool & reinitialize) override;
   void render() override;
     
 private:   
