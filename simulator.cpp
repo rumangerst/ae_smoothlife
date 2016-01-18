@@ -222,6 +222,7 @@ void simulator::run_simulation_slave()
 
     
     // Use broadcast to obtain the initial space from master
+    cout << "Slave " << mpi_rank() << " obtains space from Master ..." << endl;
     vector<float> buffer_space = vector<float>(rules.get_space_width() * rules.get_space_height());
     MPI_Bcast(buffer_space.data(), rules.get_space_width() * rules.get_space_height(), MPI_FLOAT, 0, MPI_COMM_WORLD);
 
@@ -230,7 +231,8 @@ void simulator::run_simulation_slave()
                                  get_mpi_chunk_border_width(),
                                  get_mpi_chunk_width(),
                                  rules.get_space_width()); //Overwrite main space
-    MPI_Barrier(MPI_COMM_WORLD);   
+    cout << "Slave " << mpi_rank() << " obtains space from Master ... done" << endl;                                 
+    //MPI_Barrier(MPI_COMM_WORLD);   
 
     /*space_current->raw_overwrite(buffer_space.data(),
                                  get_mpi_chunk_index(left_rank) * get_mpi_chunk_width() + get_mpi_chunk_width() - get_mpi_chunk_border_width(),
@@ -245,13 +247,14 @@ void simulator::run_simulation_slave()
                                  rules.get_space_width()); //Overwrite right border with left border of right rank*/
 
 
-
     running = true;
 
     while (running)
     {
         if (reinitialize)
         {
+            cout << "Slave " << mpi_rank() << " | Reinitialize ..." << endl;
+            
             MPI_Bcast(buffer_space.data(), rules.get_space_width() * rules.get_space_height(), MPI_FLOAT, 0, MPI_COMM_WORLD);
 
             space_current->raw_overwrite(buffer_space.data(),
@@ -260,7 +263,7 @@ void simulator::run_simulation_slave()
                                          get_mpi_chunk_width(),
                                          rules.get_space_width()); //Overwrite main space
             this->reinitialize = false;
-            MPI_Barrier(MPI_COMM_WORLD);   
+            //MPI_Barrier(MPI_COMM_WORLD);   
         }
 
         if (left_rank != 0)
@@ -301,9 +304,11 @@ void simulator::run_simulation_slave()
         space->swap(); //The queue is disabled, use swap which yields greater performance
 
         //Update communication signal
-        communication_connection.recv();
-        running = communication_connection.get_buffer_recieve()->data()[0] & APP_COMMUNICATION_RUNNING == APP_COMMUNICATION_RUNNING;
-        reinitialize = communication_connection.get_buffer_recieve()->data()[0] & APP_COMMUNICATION_REINITIALIZE == APP_COMMUNICATION_REINITIALIZE;
+        communication_connection.recv();       
+       
+        
+        running = (communication_connection.get_buffer_recieve()->data()[0] & APP_COMMUNICATION_RUNNING) == APP_COMMUNICATION_RUNNING;
+        reinitialize = (communication_connection.get_buffer_recieve()->data()[0] & APP_COMMUNICATION_REINITIALIZE) == APP_COMMUNICATION_REINITIALIZE;
     }
 
     cout << "Simulator | Slave shut down." << endl;
@@ -374,12 +379,14 @@ void simulator::run_simulation_master()
     space->buffer_read_ptr()->raw_copy_to(buffer_space.data());
     MPI_Bcast(buffer_space.data(), rules.get_space_width() * rules.get_space_height(), MPI_FLOAT, 0, MPI_COMM_WORLD);
 
-    MPI_Barrier(MPI_COMM_WORLD);
+    //MPI_Barrier(MPI_COMM_WORLD);
 
     while (running)
     {
         if (reinitialize)
         {
+            cout << "Master | Reinitialize .." << endl;
+            
             SIMULATOR_INITIALIZATION_FUNCTION(space_current);
             reinitialize = false;
 
@@ -388,7 +395,7 @@ void simulator::run_simulation_master()
             space->buffer_read_ptr()->raw_copy_to(buffer_space.data());
             MPI_Bcast(buffer_space.data(), rules.get_space_width() * rules.get_space_height(), MPI_FLOAT, 0, MPI_COMM_WORLD);
 
-            MPI_Barrier(MPI_COMM_WORLD);
+            //MPI_Barrier(MPI_COMM_WORLD);
         }
 
         if (right_rank != 0)
