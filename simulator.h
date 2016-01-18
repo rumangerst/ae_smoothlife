@@ -151,18 +151,7 @@ private:
      * @brief prepares all offset masks (CACHELINE_SIZE / sizeof(floats) many)
      * @author Bastian
      */
-    void initiate_masks();
-
-    void space_set_1(vectorized_matrix<float>* space)
-    {
-        for(int x = 0; x < rules.get_space_width(); ++x)
-        {
-            for(int y = 0; y < rules.get_space_height(); ++y)
-            {
-                space->setValue(1,x,y);
-            }
-        }
-    }
+    void initiate_masks();    
 
     void space_set_random(vectorized_matrix<float>* space)
     {
@@ -183,7 +172,18 @@ private:
      * @brief initialize_field_splat Taken from reference implementation to generate "splats"
      */
     void space_set_splat(vectorized_matrix<float>* space)
-    {
+    {        
+        //Initialize with 0 first (needed for reinitialize)
+        for(int y = 0; y < space->getNumRows(); ++y)
+        {
+            float * row = space->getRow_ptr(y);
+            
+            for(int x = 0; x < space->getNumCols(); ++x)
+            {
+                row[x] = 0;
+            }
+        }
+        
         random_device rd;
         default_random_engine re(rd());
 
