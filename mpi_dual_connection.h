@@ -111,7 +111,7 @@ public:
 		}
 		
 		//cout << mpi_rank() << " sends " << buffer_send.size() << " to " << other_rank << " with " << mpi_tag << endl;
-		MPI_Ssend(buffer_send.data(),
+		MPI_Send(buffer_send.data(),
                      buffer_send.size(),
                      datatype,
                      other_rank,
