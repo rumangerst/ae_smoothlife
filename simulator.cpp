@@ -11,13 +11,6 @@
  * DONE:
  * - simulation code correct (synchronized version)
  */
-
-/*
- * TODO: Vectorization
- * 1. test it
- * 2. consider further optimizations
- * 
- */
 #define EPSILON 5.0e-5
 
 inline bool isEqual(cfloat a, cfloat b, cfloat deviation)
@@ -77,9 +70,6 @@ void simulator::initialize(vectorized_matrix<float> & predefined_space)
     outer_mask_sum = outer_masks[0].sum(); // the sum remains the same for all masks, supposedly
     inner_mask_sum = inner_masks[0].sum();
 
-    //TODO: test for sum over all matrices!   
-
-
     initialized = true;
 }
 
@@ -96,17 +86,17 @@ void simulator::initiate_masks()
      */
     for (int o = 0; o < CACHELINE_FLOATS; ++o)
     {
-        vectorized_matrix<float> outer_mask = vectorized_matrix<float>(rules.get_ra() * 2 + 2, rules.get_ra() * 2 + 2, o);
-        outer_mask.set_circle(rules.get_ri(), 1, 1, o);
-        outer_masks.push_back(outer_mask);
+        vectorized_matrix<float> inner_mask = vectorized_matrix<float>(rules.get_ra() * 2 + 2, rules.get_ra() * 2 + 2, o);
+        inner_mask.set_circle(rules.get_ri(), 1, 1, o);
+        inner_masks.push_back(inner_mask);
         //outer_masks[o].print_to_console();
         //cout << endl;
 
         // change that back later to get_ri()
-        vectorized_matrix<float> inner_mask = vectorized_matrix<float>(rules.get_ra() * 2 + 2, rules.get_ra() * 2 + 2, o);
-        inner_mask.set_circle(rules.get_ra(), 1, 1, o);
-        inner_mask.set_circle(rules.get_ri(), 0, 1, o);
-        inner_masks.push_back(inner_mask);
+        vectorized_matrix<float> outer_mask = vectorized_matrix<float>(rules.get_ra() * 2 + 2, rules.get_ra() * 2 + 2, o);
+        outer_mask.set_circle(rules.get_ra(), 1, 1, o);
+        outer_mask.set_circle(rules.get_ri(), 0, 1, o);
+        outer_masks.push_back(outer_mask);
         assert(inner_masks[0].getLd() == outer_masks[0].getLd());
         assert(inner_masks[0].getLeftOffset() == outer_masks[0].getLeftOffset());
         assert(inner_masks[0].getRightOffset() == outer_masks[0].getRightOffset());
@@ -152,13 +142,13 @@ void simulator::simulate_step(int x_start, int w)
             //(x + outer_masks[off].getRightOffset() < this->space_current->getNumCols())
             if (optimize)
             {
-                n = getFilling(x, y, inner_masks, off, inner_mask_sum); // filling of inner circle
-                m = getFilling(x, y, outer_masks, off, outer_mask_sum); // filling of outer ring
+                m = getFilling(x, y, inner_masks, off, inner_mask_sum); // filling of inner circle
+                n = getFilling(x, y, outer_masks, off, outer_mask_sum); // filling of outer ring
             }
             else
             {
-                n = getFilling_unoptimized(x, y, inner_masks[0], inner_mask_sum); // filling of inner circle
-                m = getFilling_unoptimized(x, y, outer_masks[0], outer_mask_sum); // filling of outer ring
+                m = getFilling_unoptimized(x, y, inner_masks[0], inner_mask_sum); // filling of inner circle
+                n = getFilling_unoptimized(x, y, outer_masks[0], outer_mask_sum); // filling of outer ring
             }
 
             //Calculate the new state based on fillings n and m

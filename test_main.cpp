@@ -18,7 +18,31 @@ TEST_CASE("Test correct alignment of matrix class", "[matrix][cache]")
     }
 }
 
-TEST_CASE("Test pointer and wrapper correctness of matrix class", "[matrix][cache]")
+SCENARIO("The area of all offset masks should be the same", "[masks]") {
+    // TODO: use approx function
+    GIVEN("A valid simulator with initiated masks")
+    {
+        ruleset rules = ruleset_smooth_life_l(400, 400);
+
+        simulator sim = simulator(rules);
+        sim.optimize = false;
+        sim.initialize(); // initializes masks as well
+        
+        WHEN("Masks are initialized") {
+            // check inner masks
+            float sum_inner = sim.get_sum_of_mask(true, 0);
+            float sum_outer = sim.get_sum_of_mask(false, 0);
+            
+            for (int i=1; i<sim.get_num_of_masks(); ++i) {
+                REQUIRE(sum_inner == sim.get_sum_of_mask(true, i));
+                REQUIRE(sum_outer == sim.get_sum_of_mask(false, i));
+            }
+        }
+    }
+}
+
+/* test by bastian */
+SCENARIO("Test pointer and wrapper correctness of matrix class", "[matrix][cache]")
 {
     vectorized_matrix<float> matrix = vectorized_matrix<float>(10, 12);
     const float * data_row = matrix.getValues();
@@ -185,7 +209,7 @@ SCENARIO("Test optimized simulation: Initialize at center", "[simulator]")
 
 
 /* test by ruman */
-TEST_CASE("Test optimized simulation: Initialize at left/right border with short time", "[simulator]")
+SCENARIO("Test optimized simulation: Initialize at left/right border with short time", "[simulator]")
 {
 
     GIVEN("a 400x300 state space with state '1' at the left & right border")
@@ -243,9 +267,8 @@ TEST_CASE("Test optimized simulation: Initialize at left/right border with short
 }
 
 /* test by bastian */
-TEST_CASE("Test optimized simulation: Initialize at top/bottom border with short time", "[simulator]")
+SCENARIO("Test optimized simulation: Initialize at top/bottom border with short time", "[simulator]")
 {
-
     GIVEN("a 400x300 state space with state '1' at the top & bottom border")
     {
         vectorized_matrix<float> space = vectorized_matrix<float>(400, 300);
@@ -301,9 +324,8 @@ TEST_CASE("Test optimized simulation: Initialize at top/bottom border with short
 }
 
 /* test by bastian */
-TEST_CASE("Test optimized simulation: Initialize at left/right border with long time", "[simulator]")
+SCENARIO("Test optimized simulation: Initialize at left/right border with long time", "[simulator]")
 {
-
     GIVEN("a 400x300 state space with state '1' at the left & right border")
     {
         vectorized_matrix<float> space = vectorized_matrix<float>(400, 300);

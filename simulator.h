@@ -102,6 +102,21 @@ public:
     {
         return vectorized_matrix<float>(*space_current);
     }
+    
+    
+    float get_sum_of_mask(bool IsInner, int id) const {
+        if (id <= 0 or id >= get_num_of_masks()) {
+            cerr << "Cannot get sum of mask: Invalid id for mask!";
+        }
+        
+        return (IsInner) ? inner_masks[id].sum() : outer_masks[id].sum();
+    }
+    
+    
+    int get_num_of_masks() const {
+        assert(outer_masks.size() == inner_masks.size());
+        return outer_masks.size();
+    }
 
 private:
     

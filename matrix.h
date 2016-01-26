@@ -16,14 +16,6 @@
  * - vectorized sum()
  */
 
-/*
- * TODO: Vectorization
- * 1. apply alignment tests (function already available)
- *
- * TODO: circle
- * 1. smoothing is half done (outer ring needs "trapez" smoothing)
- */
-
 using namespace std;
 
 using cfloat = const float;
@@ -49,7 +41,6 @@ inline int matrix_index(cint x, cint y, cint ld)
  * folds x and y back into the matrix, when these are out of bounds
  * x and y can be negative!
  * @Note may be useful for testing
- * @Note may not be used for full optimization? TODO
  * @param x column index
  * @param y row index
  * @param ld number of elements in a row
@@ -327,6 +318,7 @@ public:
     }
 
     /**
+     * TODO: fix!
      * @brief sum Calculates the sum of values
      * @return
      */
@@ -336,8 +328,8 @@ public:
         for (int i = 0; i < columns; ++i)
         {
             cint I = i*ld;
-#pragma omp simd
-#pragma vector aligned
+            #pragma omp simd
+            #pragma vector aligned
             for (int j = 0; j < rows; ++j)
             {
                 s += M[j + I];
