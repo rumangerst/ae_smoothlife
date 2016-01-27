@@ -21,37 +21,37 @@ public:
             exit(-1);
         }
 
-        space_width = width;
-        space_height = height;
+        m_space_width = width;
+        m_space_height = height;
 
-        set_ra(ra);
-        set_rr(rr);
-        set_b1(b1);
-        set_b2(b2);
-        set_d1(d1);
-        set_d2(d2);
+        set_radius_outer(ra);
+        set_radius_ratio(rr);
+        set_birth_min(b1);
+        set_birth_max(b2);
+        set_death_min(d1);
+        set_death_max(d2);
         set_alpha_m(alpha_m);
         set_alpha_n(alpha_n);
-        set_dt(dt);
+        set_delta_time(dt);
         set_is_discrete(discrete);
     }
 
     int get_space_width() const
     {
-        return space_width;
+        return m_space_width;
     }
 
     int get_space_height() const
     {
-        return space_height;
+        return m_space_height;
     }
 
-    float get_ra() const
+    float get_radius_outer() const
     {
-        return ra;
+        return m_radius_outer;
     }
 
-    void set_ra(float ra)
+    void set_radius_outer(float ra)
     {
         if (ra <= 0)
         {
@@ -59,20 +59,20 @@ public:
             exit(-1);
         }
 
-        this->ra = ra;
+        this->m_radius_outer = ra;
     }
 
-    float get_rr() const
+    float get_radius_ratio() const
     {
-        return rr;
+        return m_radius_ratio;
     }
 
-    float get_ri() const
+    float get_radius_inner() const
     {
-        return ra / rr;
+        return m_radius_outer / m_radius_ratio;
     }
 
-    void set_rr(float rr)
+    void set_radius_ratio(float rr)
     {
         if (rr <= 0)
         {
@@ -80,15 +80,15 @@ public:
             exit(-1);
         }
 
-        this->rr = rr;
+        this->m_radius_ratio = rr;
     }
 
-    float get_b1() const
+    float get_birth_min() const
     {
-        return b1;
+        return m_birth_min;
     }
 
-    void set_b1(float b1)
+    void set_birth_min(float b1)
     {
         if (b1 <= 0)
         {
@@ -96,15 +96,15 @@ public:
             exit(-1);
         }
 
-        this->b1 = b1;
+        this->m_birth_min = b1;
     }
 
-    float get_b2() const
+    float get_birth_max() const
     {
-        return b2;
+        return m_birth_max;
     }
 
-    void set_b2(float b2)
+    void set_birth_max(float b2)
     {
         if (b2 <= 0)
         {
@@ -112,15 +112,15 @@ public:
             exit(-1);
         }
 
-        this->b2 = b2;
+        this->m_birth_max = b2;
     }
 
-    float get_d1() const
+    float get_death_min() const
     {
-        return d1;
+        return n_death_min;
     }
 
-    void set_d1(float d1)
+    void set_death_min(float d1)
     {
         if (d1 <= 0)
         {
@@ -128,15 +128,15 @@ public:
             exit(-1);
         }
 
-        this->d1 = d1;
+        this->n_death_min = d1;
     }
 
-    float get_d2() const
+    float get_death_max() const
     {
-        return d2;
+        return m_death_max;
     }
 
-    void set_d2(float d2)
+    void set_death_max(float d2)
     {
         if (d2 <= 0)
         {
@@ -144,7 +144,7 @@ public:
             exit(-1);
         }
 
-        this->d2 = d2;
+        this->m_death_max = d2;
     }
 
     float get_alpha_m() const
@@ -181,20 +181,20 @@ public:
 
     bool get_is_discrete() const
     {
-        return discrete;
+        return m_is_discrete;
     }
 
     void set_is_discrete(bool discrete)
     {
-        this->discrete = discrete;
+        this->m_is_discrete = discrete;
     }
 
-    float get_dt() const
+    float get_delta_time() const
     {
-        return dt;
+        return m_delta_time;
     }
 
-    void set_dt(float dt)
+    void set_delta_time(float dt)
     {
         if (dt <= 0)
         {
@@ -202,30 +202,33 @@ public:
             exit(-1);
         }
 
-        this->dt = dt;
+        this->m_delta_time = dt;
     }
 
 private:
 
-    int space_width;
-    int space_height;
-    float ra;
-    float rr;
-    float b1;
-    float b2;
-    float d1;
-    float d2;
-    float alpha_m;
-    float alpha_n;
-    bool discrete;
-    float dt;
+    int m_space_width;
+    int m_space_height;
+    // radius' of the masks (cell size)
+    float m_radius_outer;
+    float m_radius_ratio;
+    // interval in which a cell stays alive/comes to live
+    float m_birth_min;
+    float m_birth_max;
+    // interval in which a cell shall de
+    float n_death_min;
+    float m_death_max;
+    float alpha_m; // inner sigmoid width
+    float alpha_n; // outer sigmoid width
+    bool m_is_discrete;
+    float m_delta_time;
 
 protected:
 
     ruleset(int width, int height)
     {
-        this->space_width = width;
-        this->space_height = height;
+        this->m_space_width = width;
+        this->m_space_height = height;
     }
 
 };
@@ -240,16 +243,16 @@ public:
     ruleset_smooth_life_l(int width, int height) : ruleset(width, height)
     {
         printf("Using ruleset: smooth life l\n");
-        set_ra(10);
-        set_rr(3.0);
-        set_b1(0.257);
-        set_b2(0.336);
-        set_d1(0.365);
-        set_d2(0.549);
+        set_radius_outer(10);
+        set_radius_ratio(3.0);
+        set_birth_min(0.257);
+        set_birth_max(0.336);
+        set_death_min(0.365);
+        set_death_max(0.549);
         set_alpha_m(0.147);
         set_alpha_n(0.028);
         set_is_discrete(false);
-        set_dt(0.1);
+        set_delta_time(0.1);
     }
 };
 
@@ -265,14 +268,14 @@ public:
         printf("Using ruleset: rafler paper\n");
         set_alpha_n(0.028);
         set_alpha_m(0.147);
-        set_ra(21);
-        set_rr(3);
-        set_b1(0.278);
-        set_b2(0.365);
-        set_d1(0.267);
-        set_d2(0.445);
+        set_radius_outer(21);
+        set_radius_ratio(3);
+        set_birth_min(0.278);
+        set_birth_max(0.365);
+        set_death_min(0.267);
+        set_death_max(0.445);
         set_is_discrete(false);
-        set_dt(0.05);
+        set_delta_time(0.05);
     }
 };
 
@@ -369,22 +372,22 @@ inline ruleset ruleset_from_cli(int argc, char ** argv)
 
             //Set ra
             if (params >= 4)
-                ruleset_cli_set_float_value(argv, 4, base, new_ruleset, &ruleset::set_ra);
+                ruleset_cli_set_float_value(argv, 4, base, new_ruleset, &ruleset::set_radius_outer);
             //Set rr
             if (params >= 5)
-                ruleset_cli_set_float_value(argv, 5, base, new_ruleset, &ruleset::set_rr);
+                ruleset_cli_set_float_value(argv, 5, base, new_ruleset, &ruleset::set_radius_ratio);
             //Set b1
             if (params >= 6)
-                ruleset_cli_set_float_value(argv, 6, base, new_ruleset, &ruleset::set_b1);
+                ruleset_cli_set_float_value(argv, 6, base, new_ruleset, &ruleset::set_birth_min);
             //Set b2
             if (params >= 7)
-                ruleset_cli_set_float_value(argv, 7, base, new_ruleset, &ruleset::set_b2);
+                ruleset_cli_set_float_value(argv, 7, base, new_ruleset, &ruleset::set_birth_max);
             //Set d1
             if (params >= 8)
-                ruleset_cli_set_float_value(argv, 8, base, new_ruleset, &ruleset::set_d1);
+                ruleset_cli_set_float_value(argv, 8, base, new_ruleset, &ruleset::set_death_min);
             //Set d2
             if (params >= 9)
-                ruleset_cli_set_float_value(argv, 9, base, new_ruleset, &ruleset::set_d2);
+                ruleset_cli_set_float_value(argv, 9, base, new_ruleset, &ruleset::set_death_max);
             //Set alpha_m
             if (params >= 10)
                 ruleset_cli_set_float_value(argv, 10, base, new_ruleset, &ruleset::set_alpha_m);
@@ -393,7 +396,7 @@ inline ruleset ruleset_from_cli(int argc, char ** argv)
                 ruleset_cli_set_float_value(argv, 11, base, new_ruleset, &ruleset::set_alpha_n);
             //Set dt
             if (params >= 12)
-                ruleset_cli_set_float_value(argv, 12, base, new_ruleset, &ruleset::set_dt);
+                ruleset_cli_set_float_value(argv, 12, base, new_ruleset, &ruleset::set_delta_time);
             //Set discrete
             if (params >= 13)
                 ruleset_cli_set_bool_value(argv, 13, base, new_ruleset, &ruleset::set_is_discrete);
