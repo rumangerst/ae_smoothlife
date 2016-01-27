@@ -242,7 +242,7 @@ SCENARIO("Test optimized simulation: Initialize at left/right border with short 
 
         GIVEN("one unoptimized and an optimized simulator")
         {
-            ruleset rules = ruleset_smooth_life_l(space.getNumCols(), space1.getNumRows());
+            ruleset rules = ruleset_smooth_life_l(space1.getNumCols(), space1.getNumRows());
 
             simulator unoptimized_simulator = simulator(rules);
             unoptimized_simulator.m_optimize = false;

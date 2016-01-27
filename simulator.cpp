@@ -515,7 +515,7 @@ float simulator::getFilling(cint at_x, cint at_y, const vector<aligned_matrix<fl
                         cfloat const * s_row = sim_space + y * sim_ld + XB; // space row + x_start
                         cfloat const * m_row = mask_space + (y - YB) * mask_ld; // mask row
                         assert(!(long(s_row) % ALIGNMENT || long(m_row) % ALIGNMENT));
-#pragma omp simd aligned(s_row, m_row:64) reduction(+:f)
+                        #pragma omp simd aligned(s_row, m_row:64) reduction(+:f)
                         for (int x = 0; x < XE - XB; ++x)
                             f += s_row[x] * m_row[x];
                     }
@@ -530,7 +530,7 @@ float simulator::getFilling(cint at_x, cint at_y, const vector<aligned_matrix<fl
                         cfloat const * s_row = sim_space + y * sim_ld + XB; // space row + x_start
                         cfloat const * m_row = mask_space + (y - YB) * mask_ld; // mask row
                         assert(!(long(s_row) % ALIGNMENT || long(m_row) % ALIGNMENT));
-#pragma omp simd aligned(s_row, m_row:64) reduction(+:f)
+                        #pragma omp simd aligned(s_row, m_row:64) reduction(+:f)
                         for (int x = 0; x < XE - XB; ++x)
                             f += s_row[x] * m_row[x];
                     }
@@ -542,7 +542,7 @@ float simulator::getFilling(cint at_x, cint at_y, const vector<aligned_matrix<fl
                         cfloat const * s_row = sim_space + y * sim_ld + XB; // space row + x_start
                         cfloat const * m_row = mask_space + (y + mask_y_off) * mask_ld; // mask row
                         assert(!(long(s_row) % ALIGNMENT || long(m_row) % ALIGNMENT));
-#pragma omp simd aligned(s_row, m_row:64) reduction(+:f)
+                        #pragma omp simd aligned(s_row, m_row:64) reduction(+:f)
                         for (int x = 0; x < XE - XB; ++x)
                             f += s_row[x] * m_row[x];
                     }
@@ -559,7 +559,7 @@ float simulator::getFilling(cint at_x, cint at_y, const vector<aligned_matrix<fl
                     cfloat const * s_row = sim_space + y * sim_ld + XB; // space row + x_start
                     cfloat const * m_row = mask_space + (y + mask_y_off) * mask_ld; // mask row
                     assert(!(long(s_row) % ALIGNMENT || long(m_row) % ALIGNMENT));
-#pragma omp simd aligned(s_row, m_row:64) reduction(+:f)
+                    #pragma omp simd aligned(s_row, m_row:64) reduction(+:f)
                     for (int x = 0; x < XE - XB; ++x)
                         f += s_row[x] * m_row[x];
                 }
@@ -571,7 +571,7 @@ float simulator::getFilling(cint at_x, cint at_y, const vector<aligned_matrix<fl
                     cfloat const * s_row = sim_space + y * sim_ld + XB; // space row + x_start
                     cfloat const * m_row = mask_space + (y - mask_y_off2) * mask_ld; // mask row
                     assert(!(long(s_row) % ALIGNMENT || long(m_row) % ALIGNMENT));
-#pragma omp simd aligned(s_row, m_row:64) reduction(+:f)
+                    #pragma omp simd aligned(s_row, m_row:64) reduction(+:f)
                     for (int x = 0; x < XE - XB; ++x)
                         f += s_row[x] * m_row[x];
                 }
@@ -585,7 +585,7 @@ float simulator::getFilling(cint at_x, cint at_y, const vector<aligned_matrix<fl
                 cfloat const * s_row = sim_space + XB + y*sim_ld;
                 cfloat const * m_row = mask_space + (y - YB) * mask_ld; // mask row
                 assert(!(long(s_row) % ALIGNMENT || long(m_row) % ALIGNMENT));
-#pragma omp simd aligned(s_row, m_row:64) reduction(+:f)
+                #pragma omp simd aligned(s_row, m_row:64) reduction(+:f)
                 for (int x = 0; x < m_rules.get_space_width() - XB; ++x)
                     f += s_row[x] * m_row[x];
             }
@@ -597,20 +597,34 @@ float simulator::getFilling(cint at_x, cint at_y, const vector<aligned_matrix<fl
                 cfloat const * s_row = sim_space + y*sim_ld;
                 cfloat const * m_row = mask_space + mask_x_off + (y - YB) * mask_ld; // mask row
                 assert(!(long(s_row) % ALIGNMENT || long(m_row) % ALIGNMENT));
-#pragma omp simd aligned(s_row, m_row:64) reduction(+:f)
+                #pragma omp simd aligned(s_row, m_row:64) reduction(+:f)
                 for (int x = 0; x < XE - m_rules.get_space_width(); ++x)
                     f += s_row[x] * m_row[x];
             }
         }
         else
         {
-            // hard case. use wrapped version.
-            for (int y = YB; y < YE; ++y)
-            {
-                cint Y = y;
-                cint YB_ = (y - YB) * mask_ld - XB;
-                for (int x = XB; x < XE; ++x)
-                    f += space_current->getValueWrapped(x, y) * mask_space[x + YB_];
+            // XB >= 0, XE >= FW
+            if (YB < 0) {
+                // hard case. use wrapped version.
+                for (int y = YB; y < YE; ++y)
+                {
+                    cint Y = y;
+                    cint YB_ = (y - YB) * mask_ld - XB;
+                    for (int x = XB; x < XE; ++x)
+                        f += space_current->getValueWrapped(x, y) * mask_space[x + YB_];
+                }
+            } else {
+                // YE >= FW
+                assert(YE >= m_rules.get_space_height());
+                // hard case. use wrapped version.
+                for (int y = YB; y < YE; ++y)
+                {
+                    cint Y = y;
+                    cint YB_ = (y - YB) * mask_ld - XB;
+                    for (int x = XB; x < XE; ++x)
+                        f += space_current->getValueWrapped(x, y) * mask_space[x + YB_];
+                }
             }
         }
     }
@@ -623,7 +637,7 @@ float simulator::getFilling(cint at_x, cint at_y, const vector<aligned_matrix<fl
             cfloat const * s_row = sim_space + y*sim_ld;
             cfloat const * m_row = mask_space + mask_x_off + (y - YB) * mask_ld; // mask row
             assert(!(long(s_row) % ALIGNMENT || long(m_row) % ALIGNMENT));
-#pragma omp simd aligned(s_row, m_row:64) reduction(+:f)
+            #pragma omp simd aligned(s_row, m_row:64) reduction(+:f)
             for (int x = 0; x < XE; ++x)
                 f += s_row[x] * m_row[x];
             //f += sim_space[x + y*sim_ld] * mask_space[x + mask_x_off + (y - YB) * mask_ld];
@@ -635,7 +649,7 @@ float simulator::getFilling(cint at_x, cint at_y, const vector<aligned_matrix<fl
             cfloat const * s_row = sim_space + y * sim_ld + m_rules.get_space_width() + XB;
             cfloat const * m_row = mask_space + (y - YB) * mask_ld; // mask row
             assert(!(long(s_row) % ALIGNMENT || long(m_row) % ALIGNMENT));
-#pragma omp simd aligned(s_row, m_row:64) reduction(+:f)
+            #pragma omp simd aligned(s_row, m_row:64) reduction(+:f)
             for (int x = 0; x < -XB; ++x)
                 //f += sim_space[x + y*sim_ld + m_rules.get_space_width() + XB] * mask_space[x + (y - YB) * mask_ld];
                 f += s_row[x] * m_row[x];
@@ -643,14 +657,27 @@ float simulator::getFilling(cint at_x, cint at_y, const vector<aligned_matrix<fl
     }
     else
     {
-        // hard case. use wrapped version.
-        for (int y = YB; y < YE; ++y)
-        {
-            cint Y = y;
-            cint YB_ = (y - YB) * mask_ld - XB;
-
-            for (int x = XB; x < XE; ++x)
-                f += space_current->getValueWrapped(x, y) * mask_space[x + YB_];
+        // XB < 0
+        if (YB < 0) {
+            // hard case. use wrapped version.
+            for (int y = YB; y < YE; ++y)
+            {
+                cint Y = y;
+                cint YB_ = (y - YB) * mask_ld - XB;
+                for (int x = XB; x < XE; ++x)
+                    f += space_current->getValueWrapped(x, y) * mask_space[x + YB_];
+            }
+        } else {
+            // YE >= FW
+            assert(YE >= m_rules.get_space_height());
+            // hard case. use wrapped version.
+            for (int y = YB; y < YE; ++y)
+            {
+                cint Y = y;
+                cint YB_ = (y - YB) * mask_ld - XB;
+                for (int x = XB; x < XE; ++x)
+                    f += space_current->getValueWrapped(x, y) * mask_space[x + YB_];
+            }
         }
     }
 
