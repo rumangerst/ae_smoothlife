@@ -350,7 +350,8 @@ private:
      * @return a float with a value in [0,1]
      * @author Bastian
      */
-    float getFilling(cint at_x, cint at_y, const vector<aligned_matrix<float>> &masks, cint offset, cfloat mask_sum);
+    float getFilling(cint at_x, cint at_y, const aligned_matrix<float> const &mask, cfloat mask_sum);
+    //float getFilling(cint at_x, cint at_y, const vector<aligned_matrix<float>> &masks, cint offset, cfloat mask_sum);
 
     /**
      * @brief calculates the area around the point (x,y) based on the mask & normalizes it by mask_sum

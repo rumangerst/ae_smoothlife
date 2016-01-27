@@ -96,10 +96,7 @@ void simulator::initiate_masks()
         aligned_matrix<float> inner_mask = aligned_matrix<float>(m_rules.get_radius_outer() * 2 + 2, m_rules.get_radius_outer() * 2 + 2, o);
         inner_mask.set_circle(m_rules.get_radius_inner(), 1, 1, o);
         m_inner_masks.push_back(inner_mask);
-        //m_outer_masks[o].print_to_console();
-        //cout << endl;
 
-        // change that back later to get_ri()
         aligned_matrix<float> outer_mask = aligned_matrix<float>(m_rules.get_radius_outer() * 2 + 2, m_rules.get_radius_outer() * 2 + 2, o);
         outer_mask.set_circle(m_rules.get_radius_outer(), 1, 1, o);
         outer_mask.set_circle(m_rules.get_radius_inner(), 0, 1, o);
@@ -107,7 +104,6 @@ void simulator::initiate_masks()
         assert(m_inner_masks[0].getLd() == m_outer_masks[0].getLd());
         assert(m_inner_masks[0].getLeftOffset() == m_outer_masks[0].getLeftOffset());
         assert(m_inner_masks[0].getRightOffset() == m_outer_masks[0].getRightOffset());
-        //m_outer_masks[o].print_to_console();
     }
 }
 
@@ -130,27 +126,26 @@ void simulator::simulate_step()
 
 void simulator::simulate_step(int x_start, int w)
 {
-#pragma omp parallel for schedule(static)
+    #pragma omp parallel for schedule(static)
     for (int x = x_start; x < x_start + w; ++x)
     {
+        // get the alignment offset caused during iteration of space
+        // NOTE: this is mostly cache optimized. Each mask is used over an entire y array
+        int off = ((x - m_offset_from_mask_center) >= 0) ?
+                (x - m_offset_from_mask_center) % CACHELINE_FLOATS :
+                CACHELINE_FLOATS - ((m_offset_from_mask_center - x) % CACHELINE_FLOATS); // we calc this new inside the function in this case
+        const aligned_matrix<float> const &mask_inner = m_inner_masks[off];
+        const aligned_matrix<float> const &mask_outer = m_outer_masks[off];
         for (int y = 0; y < m_rules.get_space_height(); ++y)
         {
             float n;
             float m;
-
-            // get the alignment offset caused during iteration of space
-            // NOTE: for left/right border, we need two different offsets
-            int off = ((x - m_offset_from_mask_center) >= 0) ?
-                    (x - m_offset_from_mask_center) % CACHELINE_FLOATS :
-                    CACHELINE_FLOATS - ((m_offset_from_mask_center - x) % CACHELINE_FLOATS); // we calc this new inside the function in this case
-
+            
             assert(off >= 0 && off < CACHELINE_FLOATS);
-            //(x - offset_from_mask_center) >= 0
-            //(x + outer_masks[off].getRightOffset() < this->space_current->getNumCols())
             if (m_optimize)
             {
-                m = getFilling(x, y, m_inner_masks, off, m_inner_mask_sum); // filling of inner circle
-                n = getFilling(x, y, m_outer_masks, off, m_outer_mask_sum); // filling of outer ring
+                m = getFilling(x, y, mask_inner, m_inner_mask_sum); // filling of inner circle
+                n = getFilling(x, y, mask_outer, m_outer_mask_sum); // filling of outer ring
             }
             else
             {
@@ -165,7 +160,6 @@ void simulator::simulate_step(int x_start, int w)
     }
 
     //cerr << "Disabled calc" << endl;
-
     ++spacetime;
 }
 
@@ -477,11 +471,8 @@ void simulator::run_simulation_master()
     }
 }
 
-float simulator::getFilling(cint at_x, cint at_y, const vector<aligned_matrix<float>> &masks, cint offset, cfloat mask_sum)
+float simulator::getFilling(cint at_x, cint at_y, const aligned_matrix<float> &mask, cfloat mask_sum)
 {
-    assert(offset >= 0);
-    aligned_matrix<float> const &mask = masks[offset];
-
     // These define the rect inside the grid being accessed by mask
     cint XB = at_x - mask.getLeftOffset(); // aka x_begin
     cint XE = at_x + mask.getRightOffset(); // aka x_end
