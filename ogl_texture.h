@@ -13,23 +13,23 @@ public:
     ogl_texture();
     ~ogl_texture();
 
-    bool loadFromMatrix(vectorized_matrix<float> * M);
+    bool loadFromMatrix(aligned_matrix<float> * M);
     bool loadFromPixel(GLfloat *pixels, GLuint width, GLuint height);
     void free();
 
     GLuint get_texture_id()
     {
-        return texture_id;
+        return m_texture_id;
     }
 
     GLuint get_width()
     {
-        return texture_width;
+        return m_texture_width;
     }
 
     GLuint get_height()
     {
-        return texture_height;
+        return m_texture_height;
     }
 
     static GLuint power_of_two(GLuint n)
@@ -52,9 +52,9 @@ public:
 
 private:
 
-    GLuint texture_id;
-    GLuint texture_width;
-    GLuint texture_height;
+    GLuint m_texture_id;
+    GLuint m_texture_width;
+    GLuint m_texture_height;
 
     void print_gl_error(const char * msg, GLenum err)
     {

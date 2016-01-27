@@ -28,12 +28,12 @@ public:
         if (!initialize())
         {
             cerr << "GUI | Error while initialization!" << endl;
-            sim->running = false;
+            sim->m_running = false;
             return;
         }
 
         // predefine the space of the renderer
-        space = vectorized_matrix<float>(sim->rules.get_space_width(), sim->rules.get_space_height());
+        space = aligned_matrix<float>(sim->m_rules.get_space_width(), sim->m_rules.get_space_height());
 
         cout << "GUI started ..." << endl;
 
@@ -42,10 +42,10 @@ public:
         while (running)
         {
             // Try to pop queue to current space
-            if(sim->space->pop(space))
+            if(sim->m_space->pop(space))
                 ++spacetime;
 
-            update(running, sim->reinitialize);
+            update(running, sim->m_reinitialize);
             render();
 
 #ifdef ENABLE_PERF_MEASUREMENT
@@ -67,12 +67,12 @@ public:
         cout << "GUI quit." << endl;
 
         // End simulator when GUI exits
-        sim->running = false;
+        sim->m_running = false;
     }
 
 protected:
 
-    vectorized_matrix<float> space;
+    aligned_matrix<float> space;
 
     /**
      * @brief do any initialization tasks

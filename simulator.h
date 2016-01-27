@@ -35,26 +35,26 @@ public:
     simulator(const ruleset & rules);
     ~simulator();
 
-    ruleset rules;
+    ruleset m_rules;
     
     
-    matrix_buffer_queue<float> * space; // Stores all calculated spaces to be fetched by local GUI or sent by MPI. 
-    #define space_current space->buffer_read_ptr() //Redirect space_current to the read pointer provided by matrix_buffer
-    #define space_next space->buffer_write_ptr() //redirect space_next to the write pointer provided by matrix_buffer
+    matrix_buffer_queue<float> * m_space; // Stores all calculated spaces to be fetched by local GUI or sent by MPI. 
+    #define space_current m_space->buffer_read_ptr() //Redirect space_current to the read pointer provided by matrix_buffer
+    #define space_next m_space->buffer_write_ptr() //redirect space_next to the write pointer provided by matrix_buffer
     
     ulong spacetime = 0;
 
     // we need 2 masks for each unaligned space cases (to re-align it)
-    vector<vectorized_matrix<float>> outer_masks; // masks to calculate the filling of the outer ring
-    vector<vectorized_matrix<float>> inner_masks; // masks to calculate the filling of the inner cycle
-    float outer_mask_sum;
-    float inner_mask_sum;
-    int offset_from_mask_center; // the number of grid units from the center of masks [0] to index (0,0)
+    vector<aligned_matrix<float>> m_outer_masks; // masks to calculate the filling of the outer ring
+    vector<aligned_matrix<float>> m_inner_masks; // masks to calculate the filling of the inner cycle
+    float m_outer_mask_sum;
+    float m_inner_mask_sum;
+    int   m_offset_from_mask_center; // the number of grid units from the center of masks [0] to index (0,0)
 
-    bool initialized = false;
-    bool running = false;
-    bool reinitialize = false;
-    bool optimize = true; //use the optimized methods    
+    bool m_initialized = false;
+    bool m_running = false;
+    bool m_reinitialize = false;
+    bool m_optimize = true; //use the optimized methods    
 
 
     /**
@@ -67,7 +67,7 @@ public:
      * @param predefined_space A predefined space 
      * @MakeOver Bastian
      */
-    void initialize(vectorized_matrix<float> & predefined_space);
+    void initialize(aligned_matrix<float> & predefined_space);
     
     /**
      * @brief Simulates 1 (or dt) steps. Simulate for whole field
@@ -98,24 +98,30 @@ public:
      * @brief Returns copy of the current space
      * @return 
      */
-    vectorized_matrix<float> get_current_space()
+    aligned_matrix<float> get_current_space()
     {
-        return vectorized_matrix<float>(*space_current);
+        return aligned_matrix<float>(*space_current);
     }
     
-    
+    /**
+     * @brief basically only used for testing with some capsulation
+     * @param IsInner if true, the inner masks will be accessed
+     * @param id of the matrix that shall be used. Is equal to 'offset'
+     * @return the accumulation of all values contained in matrix[id]
+     */
     float get_sum_of_mask(bool IsInner, int id) const {
-        if (id <= 0 or id >= get_num_of_masks()) {
-            cerr << "Cannot get sum of mask: Invalid id for mask!";
+        if (id < 0 or id >= get_num_of_masks()) {
+            cerr << "Cannot get sum of mask: Invalid id for mask! \n";
+            exit(1);
         }
         
-        return (IsInner) ? inner_masks[id].sum() : outer_masks[id].sum();
+        return (IsInner) ? m_inner_masks[id].sum() : m_outer_masks[id].sum();
     }
     
     
     int get_num_of_masks() const {
-        assert(outer_masks.size() == inner_masks.size());
-        return outer_masks.size();
+        assert(m_outer_masks.size() == m_inner_masks.size());
+        return m_outer_masks.size();
     }
 
 private:
@@ -142,7 +148,7 @@ private:
      */
     int get_mpi_chunk_border_width()
     {
-        return matrix_calc_ld_with_padding(sizeof(float), rules.get_ra() + 1, CACHELINE_SIZE);
+        return matrix_calc_ld_with_padding(sizeof(float), m_rules.get_ra() + 1, CACHELINE_SIZE);
     }
     
     /**
@@ -153,13 +159,13 @@ private:
     {
         int ranks = mpi_comm_size();
         
-        if(rules.get_space_width() % ranks != 0)
+        if(m_rules.get_space_width() % ranks != 0)
         {
             cerr << "Cannot divide space into same parts! Terminating." << endl;
             exit(EXIT_FAILURE);
         }
         
-        return rules.get_space_width() / ranks;
+        return m_rules.get_space_width() / ranks;
     }
     
     /**
@@ -168,15 +174,15 @@ private:
      */
     void initiate_masks();    
 
-    void space_set_random(vectorized_matrix<float>* space)
+    void space_set_random(aligned_matrix<float>* space)
     {
         random_device rd;
         default_random_engine re(rd());
         uniform_real_distribution<float> random_state(0,1);
 
-        for(int x = 0; x < rules.get_space_width(); ++x)
+        for(int x = 0; x < m_rules.get_space_width(); ++x)
         {
-            for(int y = 0; y < rules.get_space_height(); ++y)
+            for(int y = 0; y < m_rules.get_space_height(); ++y)
             {
                 space->setValue(random_state(re),x,y);
             }
@@ -186,7 +192,7 @@ private:
     /**
      * @brief initialize_field_splat Taken from reference implementation to generate "splats"
      */
-    void space_set_splat(vectorized_matrix<float>* space)
+    void space_set_splat(aligned_matrix<float>* space)
     {        
         //Initialize with 0 first (needed for reinitialize)
         for(int y = 0; y < space->getNumRows(); ++y)
@@ -203,22 +209,22 @@ private:
         default_random_engine re(rd());
 
         uniform_real_distribution<float> random_idk(0,0.5);
-        uniform_real_distribution<float> random_point_x(0,rules.get_space_width());
-        uniform_real_distribution<float> random_point_y(0,rules.get_space_height());
+        uniform_real_distribution<float> random_point_x(0,m_rules.get_space_width());
+        uniform_real_distribution<float> random_point_y(0,m_rules.get_space_height());
 
         float mx, my;
 
-        mx = 2*rules.get_ra(); if (mx>rules.get_space_width()) mx=rules.get_space_width();
-        my = 2*rules.get_ra(); if (my>rules.get_space_height()) my=rules.get_space_height();
+        mx = 2*m_rules.get_ra(); if (mx>m_rules.get_space_width()) mx=m_rules.get_space_width();
+        my = 2*m_rules.get_ra(); if (my>m_rules.get_space_height()) my=m_rules.get_space_height();
 
-        for(int t=0; t<=(int)(rules.get_space_width()*rules.get_space_height()/(mx*my)); ++t)
+        for(int t=0; t<=(int)(m_rules.get_space_width()*m_rules.get_space_height()/(mx*my)); ++t)
         {
             float mx, my, dx, dy, u, l;
             int ix, iy;
 
             mx = random_point_x(re);
             my = random_point_y(re);
-            u = rules.get_ra()*(random_idk(re) + 0.5);
+            u = m_rules.get_ra()*(random_idk(re) + 0.5);
 
             for (iy=(int)(my-u-1); iy<=(int)(my+u+1); ++iy)
                 for (ix=(int)(mx-u-1); ix<=(int)(mx+u+1); ++ix)
@@ -230,11 +236,11 @@ private:
                     {
                         int px = ix;
                         int py = iy;
-                        while (px<  0) px+=rules.get_space_width();
-                        while (px>=rules.get_space_width()) px-=rules.get_space_width();
-                        while (py<  0) py+=rules.get_space_height();
-                        while (py>=rules.get_space_height()) py-=rules.get_space_height();
-                        if (px>=0 && px<rules.get_space_width() && py>=0 && py<rules.get_space_height())
+                        while (px<  0) px+=m_rules.get_space_width();
+                        while (px>=m_rules.get_space_width()) px-=m_rules.get_space_width();
+                        while (py<  0) py+=m_rules.get_space_height();
+                        while (py>=m_rules.get_space_height()) py-=m_rules.get_space_height();
+                        if (px>=0 && px<m_rules.get_space_width() && py>=0 && py<m_rules.get_space_height())
                         {
                             space->setValue(1.0,px,py);
                         }
@@ -243,7 +249,7 @@ private:
         }
     }
 
-    void space_set_propagate(vectorized_matrix<float>* space)
+    void space_set_propagate(aligned_matrix<float>* space)
     {
         random_device rd;
         default_random_engine re(rd());
@@ -254,9 +260,9 @@ private:
         const float p_proagate = 0.3;
 
         //Seed
-        for(int x = 0; x < rules.get_space_width(); ++x)
+        for(int x = 0; x < m_rules.get_space_width(); ++x)
         {
-            for(int y = 0; y < rules.get_space_height(); ++y)
+            for(int y = 0; y < m_rules.get_space_height(); ++y)
             {
                 space->setValue(random_state(re) <= p_seed ? 1 : 0, x,y);
             }
@@ -265,9 +271,9 @@ private:
         //Propagate
         for(int i = 0; i < 5; ++i)
         {
-            for(int x = 0; x < rules.get_space_width(); ++x)
+            for(int x = 0; x < m_rules.get_space_width(); ++x)
             {
-                for(int y = 0; y < rules.get_space_height(); ++y)
+                for(int y = 0; y < m_rules.get_space_height(); ++y)
                 {
                     float f = space->getValue(x,y);
 
@@ -305,12 +311,12 @@ private:
     //Corrected rules according to ref. implementation
     inline float sigma2(cfloat x, cfloat a, cfloat b)
     {
-        return sigma1(x,a,rules.get_alpha_n()) * ( 1.0 - sigma1(x,b,rules.get_alpha_n()));
+        return sigma1(x,a,m_rules.get_alpha_n()) * ( 1.0 - sigma1(x,b,m_rules.get_alpha_n()));
     }
 
     inline float sigmam(cfloat x, cfloat y, cfloat m)
     {
-        return x * ( 1.0 - sigma1(m,0.5,rules.get_alpha_m())) + y*sigma1(m, 0.5, rules.get_alpha_m());
+        return x * ( 1.0 - sigma1(m,0.5,m_rules.get_alpha_m())) + y*sigma1(m, 0.5, m_rules.get_alpha_m());
     }
 
     /**
@@ -319,21 +325,20 @@ private:
      * @param m Inner Filling
      * @return New state
      */
-    inline float discrete_state_func_1(cfloat n, cfloat m)
+    inline float discrete_state_func_1(cfloat outer, cfloat inner)
     {
         //According to ref. implementation
-        return sigmam(sigma2(n,rules.get_b1(),rules.get_b2()),sigma2(n,rules.get_d1(),rules.get_d2()),m);
-        //return sigma2(n, sigmam(rules.b1,rules.d1,m),sigmam(rules.b2,rules.d2,m));
+        return sigmam(sigma2(outer,m_rules.get_b1(),m_rules.get_b2()),sigma2(outer,m_rules.get_d1(),m_rules.get_d2()),inner);
     }
 
-    inline float discrete_as_euler(cfloat n, cfloat m)
+    inline float discrete_as_euler(cfloat outer, cfloat inner)
     {
-        return 2.0 * discrete_state_func_1(n,m) - 1.0;
+        return 2.0 * discrete_state_func_1(outer, inner) - 1.0;
     }
 
-    inline float next_step_as_euler(cint x, cint y, cfloat n, cfloat m)
+    inline float next_step_as_euler(cint x, cint y, cfloat outer, cfloat inner)
     {
-        return space_current->getValue(x,y) + rules.get_dt() * discrete_as_euler(n,m);
+        return space_current->getValue(x,y) + m_rules.get_dt() * discrete_as_euler(outer,inner);
     }
 
     /**
@@ -345,7 +350,7 @@ private:
      * @return a float with a value in [0,1]
      * @author Bastian
      */
-    float getFilling(cint at_x, cint at_y, const vector<vectorized_matrix<float>> &masks, cint offset, cfloat mask_sum);
+    float getFilling(cint at_x, cint at_y, const vector<aligned_matrix<float>> &masks, cint offset, cfloat mask_sum);
 
     /**
      * @brief calculates the area around the point (x,y) based on the mask & normalizes it by mask_sum
@@ -359,7 +364,7 @@ private:
      * @return a float with a value in [0,1]
      * @author Bastian
      */
-    float getFilling_peeled(cint at_x, cint at_y, const vector<vectorized_matrix<float>> &masks, cint offset, cfloat mask_sum);
+    float getFilling_peeled(cint at_x, cint at_y, const vector<aligned_matrix<float>> &masks, cint offset, cfloat mask_sum);
     
     /**
      * @brief calculates the area around the point (x,y) based on the mask & normalizes it by mask_sum
@@ -371,5 +376,5 @@ private:
      * @return a float with a value in [0,1]
      * @author Bastian
      */
-    float getFilling_unoptimized(cint at_x, cint at_y, const vectorized_matrix<float> & mask, cfloat mask_sum);
+    float getFilling_unoptimized(cint at_x, cint at_y, const aligned_matrix<float> & mask, cfloat mask_sum);
 };

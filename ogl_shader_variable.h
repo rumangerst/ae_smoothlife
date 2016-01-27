@@ -18,17 +18,17 @@ class shader_variable
 protected:
     shader_variable(const char * name)
     {
-        this->name = string(name);
+        this->m_name = string(name);
     }
 
     // The shader program
-    GLuint program_id;
+    GLuint m_program_id;
 
     // Location in the shader
-    GLint location = -1;
+    GLint m_location = -1;
 
     //Name of the variable in the shader
-    string name;
+    string m_name;
 
 public:
 
@@ -50,7 +50,7 @@ public:
      */
     void unbind()
     {
-        location = -1;
+        m_location = -1;
     }
 
 };
@@ -68,18 +68,18 @@ protected:
     }
 public:
 
-    bool bind(GLuint program_id) override
+    bool bind(GLuint m_program_id) override
     {
-        this->program_id = program_id;
-        this->location = glGetUniformLocation(program_id, this->name.c_str());
+        this->m_program_id = m_program_id;
+        this->m_location = glGetUniformLocation(m_program_id, this->m_name.c_str());
 
-        if(this->location == -1)
+        if(this->m_location == -1)
         {
-            cerr << "Cannot get location of shader variable " << this->name << endl;
+            cerr << "Cannot get location of shader variable " << this->m_name << endl;
             return false;
         }
 
-        cout << "Successfully bound shader variable " << this->name << endl;
+        cout << "Successfully bound shader variable " << this->m_name << endl;
 
         return true;
     }
@@ -104,7 +104,7 @@ public:
 
     void set(GLuint value) override
     {
-        glUniform1i(location, value);
+        glUniform1i(m_location, value);
     }
 };
 
@@ -126,7 +126,7 @@ public:
 
     void set(float value) override
     {
-        glUniform1f(location, value);
+        glUniform1f(m_location, value);
     }
 };
 

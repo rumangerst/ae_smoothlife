@@ -20,7 +20,7 @@ class matrix_buffer_queue
 {
 public:
 
-    matrix_buffer_queue(int size, vectorized_matrix<T> initial) : queue_max_size(size)
+    matrix_buffer_queue(int size, aligned_matrix<T> initial) : queue_max_size(size)
     {
         if (size < 0)
         {
@@ -38,12 +38,12 @@ public:
         buffer.reserve(size + 2);
 
         buffer.push_back(initial); //Insert the initial read matrix
-        buffer.push_back(vectorized_matrix<T>(initial.getNumCols(), initial.getNumRows())); //Insert the initial write matrix
+        buffer.push_back(aligned_matrix<T>(initial.getNumCols(), initial.getNumRows())); //Insert the initial write matrix
 
         // Insert queue elements
         for (int i = 0; i < size; ++i)
         {
-            buffer.push_back(vectorized_matrix<T>(initial.getNumCols(), initial.getNumRows()));
+            buffer.push_back(aligned_matrix<T>(initial.getNumCols(), initial.getNumRows()));
         }
 
         queue_start = 0; //The queue is currently at position 0
@@ -131,7 +131,7 @@ public:
      * @param dst
      * @return 
      */
-    bool pop(vectorized_matrix<T> & dst)
+    bool pop(aligned_matrix<T> & dst)
     {
         if (queue_size == 0)
         {
@@ -171,7 +171,7 @@ public:
      * @brief returns current writing position
      * @return 
      */
-    vectorized_matrix<T> * buffer_write_ptr() const
+    aligned_matrix<T> * buffer_write_ptr() const
     {
         return write_buffer;
     }
@@ -180,7 +180,7 @@ public:
      * @brief returns current read position
      * @return 
      */
-    vectorized_matrix<T> * buffer_read_ptr() const
+    aligned_matrix<T> * buffer_read_ptr() const
     {
         return read_buffer;
     }
@@ -223,7 +223,7 @@ public:
 private:
 
     const int queue_max_size;
-    vector<vectorized_matrix<T>> buffer;
+    vector<aligned_matrix<T>> buffer;
 
     atomic<int> queue_start; //Start of the queue. Atomic as this can be changed by another thread
     atomic<int> queue_size; // Size of the queue. Atomic as this can be changed by another thread
@@ -231,8 +231,8 @@ private:
     int buffer_read; //Position where the buffer is reading
 
 
-    vectorized_matrix<T> * write_buffer = nullptr;
-    vectorized_matrix<T> * read_buffer = nullptr;
+    aligned_matrix<T> * write_buffer = nullptr;
+    aligned_matrix<T> * read_buffer = nullptr;
 
     inline int wrap_index(int i)
     {

@@ -72,30 +72,30 @@ template <typename T>
  * - concept: together
  * - vectorization updates: Bastian
  */
-class vectorized_matrix
+class aligned_matrix
 {
 private:
-    aligned_vector<T> M __attribute__((aligned(ALIGNMENT)));
-    int rows;
-    int columns;
-    int ld;
-    int offset;
-    int leftOffset; // number of elements left from (a circles) center
-    int rightOffset; // number of elements right from (a circles) center
+    aligned_vector<T> m_Mat __attribute__((aligned(ALIGNMENT))); // matrix stored as vector
+    int m_rows;
+    int m_columns;  // actual number of used columns
+    int m_ld;       // leading dimension. Can be greater than columns
+    int m_offset;
+    int m_leftOffset; // number of elements left from (a circles) center
+    int m_rightOffset; // number of elements right from (a circles) center
 
 public:
 
     /**
      * @brief creates an empty matrix
      */
-    vectorized_matrix()
+    aligned_matrix()
     {
-        rows = 0;
-        columns = 0;
-        ld = 0;
-        offset = 0;
-        leftOffset = 0;
-        rightOffset = 0;
+        m_rows = 0;
+        m_columns = 0;
+        m_ld = 0;
+        m_offset = 0;
+        m_leftOffset = 0;
+        m_rightOffset = 0;
     }
 
     /**
@@ -103,18 +103,17 @@ public:
      * @param columns number of elements per column
      * @param rows number of rows
      */
-    vectorized_matrix(cint columns, cint rows)
+    aligned_matrix(cint columns, cint rows) 
     {
         cint ld = matrix_calc_ld_with_padding(sizeof (T), columns, CACHELINE_SIZE);
         assert((ld * sizeof (T)) % CACHELINE_SIZE == 0);
-
-        this->M = aligned_vector<T>(ld * rows);
-        this->rows = rows;
-        this->columns = columns;
-        this->ld = ld;
-        this->offset = 0;
-        this->leftOffset = ceil(columns / 2);
-        this->rightOffset = ld - leftOffset;
+        this->m_Mat = aligned_vector<T>(ld * rows);
+        this->m_rows = rows;
+        this->m_columns = columns;
+        this->m_ld = ld;
+        this->m_offset = 0;
+        this->m_leftOffset = ceil(columns / 2);
+        this->m_rightOffset = ld - m_leftOffset;
     }
 
     /**
@@ -125,131 +124,131 @@ public:
      * @param offset
      * @author Bastian
      */
-    vectorized_matrix(cint columns, cint rows, cint offset)
+    aligned_matrix(cint columns, cint rows, cint offset)
     {
         assert(rows > 0 && columns > 0 && offset >= 0 && offset <= CACHELINE_FLOATS);
-        this->ld = CACHELINE_FLOATS * ceil(float(offset + columns) / CACHELINE_FLOATS);
-        assert(ld * sizeof (T) % CACHELINE_SIZE == 0);
-        this->M = aligned_vector<T>(ld * rows);
-        assert(long(this->M.data()) % ALIGNMENT == 0);
-        this->columns = columns;
-        this->rows = rows; // the actual number of rows potentially containing information
-        this->offset = offset;
-        this->leftOffset = ceil(columns / 2) + offset; // will be +1 of the last, accessible index!
-        this->rightOffset = ld - leftOffset;
-        assert(leftOffset + rightOffset == ld);
+        this->m_ld = CACHELINE_FLOATS * ceil(float(offset + columns) / CACHELINE_FLOATS);
+        assert(m_ld * sizeof (T) % CACHELINE_SIZE == 0);
+        this->m_Mat = aligned_vector<T>(m_ld * rows);
+        assert(long(this->m_Mat.data()) % ALIGNMENT == 0);
+        this->m_columns = columns;
+        this->m_rows = rows; // the actual number of rows potentially containing information
+        this->m_offset = offset;
+        this->m_leftOffset = ceil(columns / 2) + offset; // will be +1 of the last, accessible index!
+        this->m_rightOffset = m_ld - m_leftOffset;
+        assert(m_leftOffset + m_rightOffset == m_ld);
     }
 
     /**
      * @brief creates a deep copy of the given matrix
      * @param copy
      */
-    vectorized_matrix(const vectorized_matrix<T> & copy)
+    aligned_matrix(const aligned_matrix<T> & copy)
     {
-        M = aligned_vector<T>(copy.M);
-        rows = copy.rows;
-        columns = copy.columns;
-        ld = copy.ld;
-        offset = copy.offset;
-        leftOffset = copy.leftOffset;
-        rightOffset = copy.rightOffset;
+        m_Mat = aligned_vector<T>(copy.m_Mat);
+        m_rows = copy.m_rows;
+        m_columns = copy.m_columns;
+        m_ld = copy.m_ld;
+        m_offset = copy.m_offset;
+        m_leftOffset = copy.m_leftOffset;
+        m_rightOffset = copy.m_rightOffset;
     }
 
     // Getter and Setter methods
 
     inline T getValue(cint x, cint y) const
     {
-        return M[matrix_index(x, y, ld)];
+        return m_Mat[matrix_index(x, y, m_ld)];
     }
 
     inline T getValueWrapped(cint x, cint y) const
     {
-        return M[matrix_index_wrapped(x, y, columns, rows, ld)];
+        return m_Mat[matrix_index_wrapped(x, y, m_columns, m_rows, m_ld)];
     }
     
     /**
      * - uses ld als width instead of columns
      * - this is/was needed to test correctness of values inside vectorized code
      */
-    inline T getValueWrappedLd(cint x, cint y) const
+    inline T getValueWrappedLd(cint col, cint row) const
     {
-        return M[matrix_index_wrapped(x, y, ld, rows, ld)];
+        return m_Mat[matrix_index_wrapped(col, row, m_ld, m_rows, m_ld)];
     }
     
-    inline T* getRow_ptr(int y)
+    inline T* getRow_ptr(int row)
     {
-        return &M.data()[matrix_index(0, y, ld)];
+        return &m_Mat.data()[matrix_index(0, row, m_ld)];
     }
 
-    inline const T* getRow_ptr(int y) const
+    inline const T* getRow_ptr(int row) const
     {
-        return &M.data()[matrix_index(0, y, ld)];
+        return &m_Mat.data()[matrix_index(0, row, m_ld)];
     }
 
-    inline const T* getValue_ptr(cint x, cint y) const
+    inline const T* getValue_ptr(cint col, cint row) const
     {
-        return &M.data()[matrix_index(x, y, ld)];
+        return &m_Mat.data()[matrix_index(col, row, m_ld)];
     }
 
-    inline const T* getValueWrapped_ptr(cint x, cint y) const
+    inline const T* getValueWrapped_ptr(cint col, cint row) const
     {
-        return &M.data()[matrix_index_wrapped(x, y, columns, rows, ld)];
+        return &m_Mat.data()[matrix_index_wrapped(col, row, m_columns, m_rows, m_ld)];
     }
     
-    inline const T* getValueWrappedLd_ptr(cint x, cint y) const
+    inline const T* getValueWrappedLd_ptr(cint col, cint row) const
     {
-        return &M.data()[matrix_index_wrapped(x, y, ld, rows, ld)];
+        return &m_Mat.data()[matrix_index_wrapped(col, row, m_ld, m_rows, m_ld)];
     }
 
-    inline void setValue(T val, cint x, cint y)
+    inline void setValue(T val, cint col, cint row)
     {
-        M[matrix_index(x, y, ld)] = val;
+        m_Mat[matrix_index(col, row, m_ld)] = val;
     }
 
-    inline void setValueWrapped(T val, cint x, cint y)
+    inline void setValueWrapped(T val, cint col, cint row)
     {
-        M[matrix_index_wrapped(x, y, columns, rows, ld)] = val;
+        m_Mat[matrix_index_wrapped(col, row, m_columns, m_rows, m_ld)] = val;
     }
 
     const T * getValues() const
     {
-        return M.data();
+        return m_Mat.data();
     }
 
     int getLd() const
     {
-        return this->ld;
+        return this->m_ld;
     }
 
     int getNumRows() const
     {
-        return this->rows;
+        return this->m_rows;
     }
 
     int getNumCols() const
     {
-        return this->columns;
+        return this->m_columns;
     }
 
     int getLeftOffset() const
     {
-        return this->leftOffset;
+        return this->m_leftOffset;
     }
 
     int getRightOffset() const
     {
-        return this->rightOffset;
+        return this->m_rightOffset;
     }
 
     // Advanced Access Methods
 
-    friend ostream& operator<<(ostream& out, const vectorized_matrix<T> & m)
+    friend ostream& operator<<(ostream& out, const aligned_matrix<T> & m)
     {
-        for (int y = 0; y < m.columns; ++y)
+        for (int y = 0; y < m.m_columns; ++y)
         {
-            for (int x = 0; x < m.rows; ++x)
+            for (int x = 0; x < m.m_rows; ++x)
             {
-                out << m.M[matrix_index(x, y, m.ld)] << ",";
+                out << m.m_Mat[matrix_index(x, y, m.m_ld)] << ",";
             }
             out << endl;
         }
@@ -273,9 +272,9 @@ public:
         cdouble c_x = center_x + offset; // push it to the right
         cdouble c_y = center_y;
 
-        for (int i = 0; i < ld; ++i)
+        for (int i = 0; i < m_ld; ++i)
         {
-            for (int j = 0; j < rows; ++j)
+            for (int j = 0; j < m_rows; ++j)
             {
                 cdouble local_x = i + 0.5;
                 cdouble local_y = j + 0.5;
@@ -303,7 +302,7 @@ public:
 
     inline int getNumBytesPerRow()
     {
-        return sizeof (T) * ld;
+        return sizeof (T) * m_ld;
     }
 
     /**
@@ -314,45 +313,51 @@ public:
      */
     void set_circle(cdouble r, const T v, cdouble smooth_factor, cint offset)
     {
-        set_circle(columns / 2.0, rows / 2.0, r, v, smooth_factor, offset);
+        set_circle(m_columns / 2.0, m_rows / 2.0, r, v, smooth_factor, offset);
     }
 
     /**
-     * TODO: fix!
-     * @brief sum Calculates the sum of values
+     * @brief sum accumulates all values of the matrix
      * @return
      */
     float sum() const {
         float s = 0;
 
-        for (int i = 0; i < columns; ++i)
+        for (int i = 0; i < m_columns; ++i)
         {
-            cint I = i*ld;
-            #pragma omp simd
-            #pragma vector aligned
-            for (int j = 0; j < rows; ++j)
+            //cint I = i*m_ld;
+            cint I = m_offset + i*m_ld;
+            for (int j = 0; j < m_rows; ++j)
             {
-                s += M[j + I];
+                s += m_Mat[j + I];
             }
         }
 
         return s;
     }
     
+    /**
+     * @brief: prints the given matrix with '0' and 'x' letters to the console
+     * - 0 will be printed, if any value is exactly zero, 'x' otherwise
+     * - this is used to make basic checks for the circlular masks
+     */
     void print_to_console() const {
         cout << "matrix print:\n";
-        for (int y = 0; y < this->rows; ++y)
+        for (int y = 0; y < this->m_rows; ++y)
         {
-            for (int x = 0; x < this->ld; ++x)
-                printf((x < offset) ? "-" : ((this->getValue(x, y) == 0) ? "0" : "x"), "  ");
+            for (int x = 0; x < this->m_ld; ++x)
+                printf((x < m_offset) ? "-" : ((this->getValue(x, y) == 0) ? "0" : "x"), "  ");
             printf("\n");
         }
         cout.flush();
     }
     
+    /**
+     * @brief: prints some basic informaton about this matrix to the console
+     */
     void print_info() const {
-        cout << "rows: " << rows << "  cols: " << columns << "  ld: " << ld << endl;
-        cout << "left: " << leftOffset << "  right: " << rightOffset << "  off: " << offset << endl;
+        cout << "rows: " << m_rows << "  cols: " << m_columns << "  ld: " << m_ld << endl;
+        cout << "left: " << m_leftOffset << "  right: " << m_rightOffset << "  off: " << m_offset << endl;
         cout.flush();
     }
 
@@ -360,7 +365,7 @@ public:
      * @brief Overwrites the data in this matrix with data from src.
      * @param src must have the same size as this matrix, otherwise the program will terminate!
      */
-    void overwrite(vectorized_matrix<T> & src)
+    void overwrite(aligned_matrix<T> & src)
     {
         if (src.getNumCols() != getNumCols() || src.getNumRows() != getNumRows())
         {
@@ -459,7 +464,7 @@ template <typename T>
 /**
  * @brief return TRUE, if the given matrix is optimized for vectorization
  */
-bool is_vectorized_matrix(vectorized_matrix<T>* mat)
+bool is_vectorized_matrix(aligned_matrix<T>* mat)
 {
 
     if (mat == NULL)

@@ -2,9 +2,9 @@
 
 ogl_texture::ogl_texture()
 {
-    texture_id = 0;
-    texture_width = 0;
-    texture_height = 0;
+    m_texture_id = 0;
+    m_texture_width = 0;
+    m_texture_height = 0;
 }
 
 ogl_texture::~ogl_texture()
@@ -12,7 +12,7 @@ ogl_texture::~ogl_texture()
     free();
 }
 
-bool ogl_texture::loadFromMatrix(vectorized_matrix<float> * M)
+bool ogl_texture::loadFromMatrix(aligned_matrix<float> * M)
 {
     // The texture size should be power of two
     cint tex_w = power_of_two(M->getNumCols());
@@ -42,11 +42,11 @@ bool ogl_texture::loadFromPixel(GLfloat *pixels, GLuint width, GLuint height)
 
     free();
 
-    texture_width = width;
-    texture_height = height;    
+    m_texture_width = width;
+    m_texture_height = height;    
 
-    glGenTextures(1, &texture_id);
-    glBindTexture(GL_TEXTURE_2D, texture_id);
+    glGenTextures(1, &m_texture_id);
+    glBindTexture(GL_TEXTURE_2D, m_texture_id);
 
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, width, height, 0, GL_RED, GL_FLOAT, pixels);
 
@@ -65,13 +65,13 @@ bool ogl_texture::loadFromPixel(GLfloat *pixels, GLuint width, GLuint height)
 
 void ogl_texture::free()
 {
-    if(texture_id != 0)
+    if(m_texture_id != 0)
     {
-        glDeleteTextures(1, &texture_id);
-        texture_id = 0;
+        glDeleteTextures(1, &m_texture_id);
+        m_texture_id = 0;
     }
 
-    texture_width = 0;
-    texture_height = 0;
+    m_texture_width = 0;
+    m_texture_height = 0;
 }
 

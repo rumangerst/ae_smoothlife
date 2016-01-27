@@ -32,8 +32,8 @@ protected:
     
 private:   
 
-    SDL_Window* window = nullptr;
-    SDL_Renderer* renderer = nullptr;
+    SDL_Window* m_window = nullptr;
+    SDL_Renderer* m_renderer = nullptr;
 
     void print_sdl_error(const char * msg)
     {

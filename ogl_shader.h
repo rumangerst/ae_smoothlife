@@ -28,22 +28,22 @@ public:
 
     GLuint get_program_id()
     {
-        return program_id;
+        return m_program_id;
     }
 
-    string name;
+    string m_name;
 
-    shader_uniform_variable_texture_unit uniform_texture0 = shader_uniform_variable_texture_unit("texture0");
-    shader_uniform_variable_1f uniform_render_w = shader_uniform_variable_1f("render_w");
-    shader_uniform_variable_1f uniform_render_h = shader_uniform_variable_1f("render_h");
-    shader_uniform_variable_1f uniform_field_w = shader_uniform_variable_1f("field_w");
-    shader_uniform_variable_1f uniform_field_h = shader_uniform_variable_1f("field_h");
-    shader_uniform_variable_1f uniform_time = shader_uniform_variable_1f("time");
+    shader_uniform_variable_texture_unit m_uniform_texture0 = shader_uniform_variable_texture_unit("texture0");
+    shader_uniform_variable_1f m_uniform_render_w = shader_uniform_variable_1f("render_w");
+    shader_uniform_variable_1f m_uniform_render_h = shader_uniform_variable_1f("render_h");
+    shader_uniform_variable_1f m_uniform_field_w = shader_uniform_variable_1f("field_w");
+    shader_uniform_variable_1f m_uniform_field_h = shader_uniform_variable_1f("field_h");
+    shader_uniform_variable_1f m_uniform_time = shader_uniform_variable_1f("time");
 
 
 private:
 
-    GLuint program_id = 0;
+    GLuint m_program_id = 0;
 
     void bind_variables();
     void unbind_variables();    

@@ -9,35 +9,42 @@
 
 /*
  * DONE:
+ * - vectorization
  * - simulation code correct (synchronized version)
  */
 #define EPSILON 5.0e-5
 
-inline bool isEqual(cfloat a, cfloat b, cfloat deviation)
+/**
+ * returns true, if |a-b| < deviation is true
+ */
+inline bool isApprox(cfloat a, cfloat b, cfloat deviation)
 {
     return abs(a - b) < deviation;
 }
 
-inline bool isEqual(cfloat a, cfloat b)
+/**
+ * returns true, if |a-b| < EPSILON is true
+ */
+inline bool isApprox(cfloat a, cfloat b)
 {
-    return isEqual(a, b, EPSILON);
+    return isApprox(a, b, EPSILON);
 }
 
-simulator::simulator(const ruleset & r) : rules(r)
+simulator::simulator(const ruleset & r) : m_rules(r)
 {
 }
 
 simulator::~simulator()
 {
-    if (space != nullptr)
+    if (m_space != nullptr)
     {
-        delete space;
+        delete m_space;
     }
 }
 
-void simulator::initialize(vectorized_matrix<float> & predefined_space)
+void simulator::initialize(aligned_matrix<float> & predefined_space)
 {
-    if (predefined_space.getNumRows() != rules.get_space_height() || predefined_space.getNumCols() != rules.get_space_width())
+    if (predefined_space.getNumRows() != m_rules.get_space_height() || predefined_space.getNumCols() != m_rules.get_space_width())
     {
         cerr << "Could not initialize simulator: Invalid predefined space size!" << endl;
         exit(-1);
@@ -56,21 +63,21 @@ void simulator::initialize(vectorized_matrix<float> & predefined_space)
     else
         queue_size = 0;
 
-    space = new matrix_buffer_queue<float>(queue_size, predefined_space);
+    m_space = new matrix_buffer_queue<float>(queue_size, predefined_space);
 
     //space_current = new vectorized_matrix<float>(predefined_space);
     //space_next = new vectorized_matrix<float>(rules.get_space_width(), rules.get_space_height());
 
-    outer_masks.reserve(CACHELINE_FLOATS);
-    inner_masks.reserve(CACHELINE_FLOATS);
+    m_outer_masks.reserve(CACHELINE_FLOATS);
+    m_inner_masks.reserve(CACHELINE_FLOATS);
 
     initiate_masks();
 
-    offset_from_mask_center = inner_masks[0].getLeftOffset();
-    outer_mask_sum = outer_masks[0].sum(); // the sum remains the same for all masks, supposedly
-    inner_mask_sum = inner_masks[0].sum();
+    m_offset_from_mask_center = m_inner_masks[0].getLeftOffset();
+    m_outer_mask_sum = m_outer_masks[0].sum(); // the sum remains the same for all masks, supposedly
+    m_inner_mask_sum = m_inner_masks[0].sum();
 
-    initialized = true;
+    m_initialized = true;
 }
 
 void simulator::initiate_masks()
@@ -86,21 +93,21 @@ void simulator::initiate_masks()
      */
     for (int o = 0; o < CACHELINE_FLOATS; ++o)
     {
-        vectorized_matrix<float> inner_mask = vectorized_matrix<float>(rules.get_ra() * 2 + 2, rules.get_ra() * 2 + 2, o);
-        inner_mask.set_circle(rules.get_ri(), 1, 1, o);
-        inner_masks.push_back(inner_mask);
-        //outer_masks[o].print_to_console();
+        aligned_matrix<float> inner_mask = aligned_matrix<float>(m_rules.get_ra() * 2 + 2, m_rules.get_ra() * 2 + 2, o);
+        inner_mask.set_circle(m_rules.get_ri(), 1, 1, o);
+        m_inner_masks.push_back(inner_mask);
+        //m_outer_masks[o].print_to_console();
         //cout << endl;
 
         // change that back later to get_ri()
-        vectorized_matrix<float> outer_mask = vectorized_matrix<float>(rules.get_ra() * 2 + 2, rules.get_ra() * 2 + 2, o);
-        outer_mask.set_circle(rules.get_ra(), 1, 1, o);
-        outer_mask.set_circle(rules.get_ri(), 0, 1, o);
-        outer_masks.push_back(outer_mask);
-        assert(inner_masks[0].getLd() == outer_masks[0].getLd());
-        assert(inner_masks[0].getLeftOffset() == outer_masks[0].getLeftOffset());
-        assert(inner_masks[0].getRightOffset() == outer_masks[0].getRightOffset());
-        //inner_masks[o].print_info();
+        aligned_matrix<float> outer_mask = aligned_matrix<float>(m_rules.get_ra() * 2 + 2, m_rules.get_ra() * 2 + 2, o);
+        outer_mask.set_circle(m_rules.get_ra(), 1, 1, o);
+        outer_mask.set_circle(m_rules.get_ri(), 0, 1, o);
+        m_outer_masks.push_back(outer_mask);
+        assert(m_inner_masks[0].getLd() == m_outer_masks[0].getLd());
+        assert(m_inner_masks[0].getLeftOffset() == m_outer_masks[0].getLeftOffset());
+        assert(m_inner_masks[0].getRightOffset() == m_outer_masks[0].getRightOffset());
+        //m_outer_masks[o].print_to_console();
     }
 }
 
@@ -108,7 +115,7 @@ void simulator::initialize()
 {
     cout << "Default initialization ..." << endl;
 
-    vectorized_matrix<float> * space = new vectorized_matrix<float>(rules.get_space_width(), rules.get_space_height());
+    aligned_matrix<float> * space = new aligned_matrix<float>(m_rules.get_space_width(), m_rules.get_space_height());
 
     SIMULATOR_INITIALIZATION_FUNCTION(space);
 
@@ -118,7 +125,7 @@ void simulator::initialize()
 
 void simulator::simulate_step()
 {
-    simulate_step(0, rules.get_space_width());
+    simulate_step(0, m_rules.get_space_width());
 }
 
 void simulator::simulate_step(int x_start, int w)
@@ -126,34 +133,34 @@ void simulator::simulate_step(int x_start, int w)
 #pragma omp parallel for schedule(static)
     for (int x = x_start; x < x_start + w; ++x)
     {
-        for (int y = 0; y < rules.get_space_height(); ++y)
+        for (int y = 0; y < m_rules.get_space_height(); ++y)
         {
             float n;
             float m;
 
             // get the alignment offset caused during iteration of space
             // NOTE: for left/right border, we need two different offsets
-            int off = ((x - offset_from_mask_center) >= 0) ?
-                    (x - offset_from_mask_center) % CACHELINE_FLOATS :
-                    CACHELINE_FLOATS - ((offset_from_mask_center - x) % CACHELINE_FLOATS); // we calc this new inside the function in this case
+            int off = ((x - m_offset_from_mask_center) >= 0) ?
+                    (x - m_offset_from_mask_center) % CACHELINE_FLOATS :
+                    CACHELINE_FLOATS - ((m_offset_from_mask_center - x) % CACHELINE_FLOATS); // we calc this new inside the function in this case
 
             assert(off >= 0 && off < CACHELINE_FLOATS);
             //(x - offset_from_mask_center) >= 0
             //(x + outer_masks[off].getRightOffset() < this->space_current->getNumCols())
-            if (optimize)
+            if (m_optimize)
             {
-                m = getFilling(x, y, inner_masks, off, inner_mask_sum); // filling of inner circle
-                n = getFilling(x, y, outer_masks, off, outer_mask_sum); // filling of outer ring
+                m = getFilling(x, y, m_inner_masks, off, m_inner_mask_sum); // filling of inner circle
+                n = getFilling(x, y, m_outer_masks, off, m_outer_mask_sum); // filling of outer ring
             }
             else
             {
-                m = getFilling_unoptimized(x, y, inner_masks[0], inner_mask_sum); // filling of inner circle
-                n = getFilling_unoptimized(x, y, outer_masks[0], outer_mask_sum); // filling of outer ring
+                m = getFilling_unoptimized(x, y, m_inner_masks[0], m_inner_mask_sum); // filling of inner circle
+                n = getFilling_unoptimized(x, y, m_outer_masks[0], m_outer_mask_sum); // filling of outer ring
             }
 
             //Calculate the new state based on fillings n and m
             //Smooth state function must be clamped to [0,1] (this is also done by author's implementation!)
-            space_next->setValue(rules.get_is_discrete() ? discrete_state_func_1(n, m) : fmax(0, fmin(1, next_step_as_euler(x, y, n, m))), x, y);
+            space_next->setValue(m_rules.get_is_discrete() ? discrete_state_func_1(n, m) : fmax(0, fmin(1, next_step_as_euler(x, y, n, m))), x, y);
         }
     }
 
@@ -184,7 +191,7 @@ void simulator::run_simulation_slave()
             true,
             false,
             APP_MPI_TAG_SPACE,
-            rules.get_space_height() * get_mpi_chunk_width(),
+            m_rules.get_space_height() * get_mpi_chunk_width(),
             MPI_FLOAT);
 
     // The slave has connections to the left and right rank
@@ -200,27 +207,27 @@ void simulator::run_simulation_slave()
             left_rank != 0,
             true,
             border_left_tag,
-            rules.get_space_height() * get_mpi_chunk_border_width(),
+            m_rules.get_space_height() * get_mpi_chunk_border_width(),
             MPI_FLOAT);
     mpi_dual_connection<float> border_right_connection = mpi_dual_connection<float>(
             right_rank,
             right_rank != 0,
             true,
             border_right_tag,
-            rules.get_space_height() * get_mpi_chunk_border_width(),
+            m_rules.get_space_height() * get_mpi_chunk_border_width(),
             MPI_FLOAT);
 
     
     // Use broadcast to obtain the initial space from master
     cout << "Slave " << mpi_rank() << " obtains space from Master ..." << endl;
-    vector<float> buffer_space = vector<float>(rules.get_space_width() * rules.get_space_height());
-    MPI_Bcast(buffer_space.data(), rules.get_space_width() * rules.get_space_height(), MPI_FLOAT, 0, MPI_COMM_WORLD);
+    vector<float> buffer_space = vector<float>(m_rules.get_space_width() * m_rules.get_space_height());
+    MPI_Bcast(buffer_space.data(), m_rules.get_space_width() * m_rules.get_space_height(), MPI_FLOAT, 0, MPI_COMM_WORLD);
 
     space_current->raw_overwrite(buffer_space.data(),
                                  get_mpi_chunk_index() * get_mpi_chunk_width(),
                                  get_mpi_chunk_border_width(),
                                  get_mpi_chunk_width(),
-                                 rules.get_space_width()); //Overwrite main space
+                                 m_rules.get_space_width()); //Overwrite main space
     cout << "Slave " << mpi_rank() << " obtains space from Master ... done" << endl;                                 
     //MPI_Barrier(MPI_COMM_WORLD);   
 
@@ -237,22 +244,22 @@ void simulator::run_simulation_slave()
                                  rules.get_space_width()); //Overwrite right border with left border of right rank*/
 
 
-    running = true;
+    m_running = true;
 
-    while (running)
+    while (m_running)
     {
-        if (reinitialize)
+        if (m_reinitialize)
         {
             cout << "Slave " << mpi_rank() << " | Reinitialize ..." << endl;
             
-            MPI_Bcast(buffer_space.data(), rules.get_space_width() * rules.get_space_height(), MPI_FLOAT, 0, MPI_COMM_WORLD);
+            MPI_Bcast(buffer_space.data(), m_rules.get_space_width() * m_rules.get_space_height(), MPI_FLOAT, 0, MPI_COMM_WORLD);
 
             space_current->raw_overwrite(buffer_space.data(),
                                          get_mpi_chunk_index() * get_mpi_chunk_width(),
                                          get_mpi_chunk_border_width(),
                                          get_mpi_chunk_width(),
-                                         rules.get_space_width()); //Overwrite main space
-            this->reinitialize = false;
+                                         m_rules.get_space_width()); //Overwrite main space
+            this->m_reinitialize = false;
             //MPI_Barrier(MPI_COMM_WORLD);   
         }
 
@@ -291,14 +298,14 @@ void simulator::run_simulation_slave()
         space_next->raw_copy_to(space_connection.get_buffer_send()->data(), get_mpi_chunk_border_width(), get_mpi_chunk_width());
         space_connection.send();
 
-        space->swap(); //The queue is disabled, use swap which yields greater performance
+        m_space->swap(); //The queue is disabled, use swap which yields greater performance
 
         //Update communication signal
         communication_connection.recv();       
        
         
-        running = (communication_connection.get_buffer_recieve()->data()[0] & APP_COMMUNICATION_RUNNING) == APP_COMMUNICATION_RUNNING;
-        reinitialize = (communication_connection.get_buffer_recieve()->data()[0] & APP_COMMUNICATION_REINITIALIZE) == APP_COMMUNICATION_REINITIALIZE;
+        m_running = (communication_connection.get_buffer_recieve()->data()[0] & APP_COMMUNICATION_RUNNING) == APP_COMMUNICATION_RUNNING;
+        m_reinitialize = (communication_connection.get_buffer_recieve()->data()[0] & APP_COMMUNICATION_REINITIALIZE) == APP_COMMUNICATION_REINITIALIZE;
     }
 
     cout << "Simulator | Slave shut down." << endl;
@@ -307,7 +314,7 @@ void simulator::run_simulation_slave()
 void simulator::run_simulation_master()
 {
     cout << "Simulator | Running Master MPI simulator ..." << endl;
-    running = true;
+    m_running = true;
 
 #ifdef ENABLE_PERF_MEASUREMENT
     auto perf_time_start = chrono::high_resolution_clock::now();
@@ -337,7 +344,7 @@ void simulator::run_simulation_master()
                                     false,
                                     true,
                                     APP_MPI_TAG_SPACE,
-                                    rules.get_space_height() * get_mpi_chunk_width(),
+                                    m_rules.get_space_height() * get_mpi_chunk_width(),
                                     MPI_FLOAT));
     }
 
@@ -354,36 +361,36 @@ void simulator::run_simulation_master()
             true,
             false,
             border_left_tag,
-            rules.get_space_height() * get_mpi_chunk_border_width(),
+            m_rules.get_space_height() * get_mpi_chunk_border_width(),
             MPI_FLOAT);
     mpi_dual_connection<float> border_right_connection = mpi_dual_connection<float>(
             right_rank,
             true,
             false,
             border_right_tag,
-            rules.get_space_height() * get_mpi_chunk_border_width(),
+            m_rules.get_space_height() * get_mpi_chunk_border_width(),
             MPI_FLOAT);
 
     //Send the initial field to all slaves   
-    vector<float> buffer_space = vector<float>(rules.get_space_width() * rules.get_space_height());
-    space->buffer_read_ptr()->raw_copy_to(buffer_space.data());
-    MPI_Bcast(buffer_space.data(), rules.get_space_width() * rules.get_space_height(), MPI_FLOAT, 0, MPI_COMM_WORLD);
+    vector<float> buffer_space = vector<float>(m_rules.get_space_width() * m_rules.get_space_height());
+    m_space->buffer_read_ptr()->raw_copy_to(buffer_space.data());
+    MPI_Bcast(buffer_space.data(), m_rules.get_space_width() * m_rules.get_space_height(), MPI_FLOAT, 0, MPI_COMM_WORLD);
 
     //MPI_Barrier(MPI_COMM_WORLD);
 
-    while (running)
+    while (m_running)
     {
-        if (reinitialize)
+        if (m_reinitialize)
         {
             cout << "Master | Reinitialize .." << endl;
             
             SIMULATOR_INITIALIZATION_FUNCTION(space_current);
-            reinitialize = false;
+            m_reinitialize = false;
 
             //Resend the field if reinitialization was triggered
-            vector<float> buffer_space = vector<float>(rules.get_space_width() * rules.get_space_height());
-            space->buffer_read_ptr()->raw_copy_to(buffer_space.data());
-            MPI_Bcast(buffer_space.data(), rules.get_space_width() * rules.get_space_height(), MPI_FLOAT, 0, MPI_COMM_WORLD);
+            vector<float> buffer_space = vector<float>(m_rules.get_space_width() * m_rules.get_space_height());
+            m_space->buffer_read_ptr()->raw_copy_to(buffer_space.data());
+            MPI_Bcast(buffer_space.data(), m_rules.get_space_width() * m_rules.get_space_height(), MPI_FLOAT, 0, MPI_COMM_WORLD);
 
             //MPI_Barrier(MPI_COMM_WORLD);
         }
@@ -445,21 +452,21 @@ void simulator::run_simulation_master()
         //Try to push into queue
         if (!APP_PERFTEST)
         {
-            while (running && !space->push())
+            while (m_running && !m_space->push())
             {
             }
         }
         else
         {
-            space->swap();
+            m_space->swap();
         }
 
         //Send status signal
         int communication_status = 0;
 
-        if (running)
+        if (m_running)
             communication_status |= APP_COMMUNICATION_RUNNING;
-        if (reinitialize)
+        if (m_reinitialize)
             communication_status |= APP_COMMUNICATION_REINITIALIZE;
 
         for (mpi_dual_connection<int> & conn : communication_connections)
@@ -470,10 +477,10 @@ void simulator::run_simulation_master()
     }
 }
 
-float simulator::getFilling(cint at_x, cint at_y, const vector<vectorized_matrix<float>> &masks, cint offset, cfloat mask_sum)
+float simulator::getFilling(cint at_x, cint at_y, const vector<aligned_matrix<float>> &masks, cint offset, cfloat mask_sum)
 {
     assert(offset >= 0);
-    vectorized_matrix<float> const &mask = masks[offset];
+    aligned_matrix<float> const &mask = masks[offset];
 
     // These define the rect inside the grid being accessed by mask
     cint XB = at_x - mask.getLeftOffset(); // aka x_begin
@@ -494,12 +501,12 @@ float simulator::getFilling(cint at_x, cint at_y, const vector<vectorized_matrix
     float f = 0;
     if (XB >= 0)
     {
-        if (XE < rules.get_space_width())
+        if (XE < m_rules.get_space_width())
         {
             // NOTE: x accessible without wrapping
             if (YB >= 0)
             {
-                if (YE < rules.get_space_height())
+                if (YE < m_rules.get_space_height())
                 {
                     assert((XB * sizeof (float)) % ALIGNMENT == 0 && (XE * sizeof (float)) % ALIGNMENT == 0);
                     // Ideal case. Access within the space without crossing edges. Tested.
@@ -518,7 +525,7 @@ float simulator::getFilling(cint at_x, cint at_y, const vector<vectorized_matrix
                     assert((XB * sizeof (float)) % ALIGNMENT == 0 && (XE * sizeof (float)) % ALIGNMENT == 0);
                     // both loops have the same offset & mask!
                     // special case 2. Ideally vectorized. Access over bottom border. Tested
-                    for (int y = YB; y < rules.get_space_height(); ++y)
+                    for (int y = YB; y < m_rules.get_space_height(); ++y)
                     {
                         cfloat const * s_row = sim_space + y * sim_ld + XB; // space row + x_start
                         cfloat const * m_row = mask_space + (y - YB) * mask_ld; // mask row
@@ -529,8 +536,8 @@ float simulator::getFilling(cint at_x, cint at_y, const vector<vectorized_matrix
                     }
 
 
-                    cint mask_y_off = rules.get_space_height() - YB; // row offset caused by prior loop
-                    for (int y = 0; y < YE - rules.get_space_height(); ++y)
+                    cint mask_y_off = m_rules.get_space_height() - YB; // row offset caused by prior loop
+                    for (int y = 0; y < YE - m_rules.get_space_height(); ++y)
                     {
                         cfloat const * s_row = sim_space + y * sim_ld + XB; // space row + x_start
                         cfloat const * m_row = mask_space + (y + mask_y_off) * mask_ld; // mask row
@@ -558,8 +565,8 @@ float simulator::getFilling(cint at_x, cint at_y, const vector<vectorized_matrix
                 }
 
 
-                cint mask_y_off2 = rules.get_space_height() + YB;
-                for (int y = rules.get_space_height() + YB; y < rules.get_space_height(); ++y)
+                cint mask_y_off2 = m_rules.get_space_height() + YB;
+                for (int y = m_rules.get_space_height() + YB; y < m_rules.get_space_height(); ++y)
                 {
                     cfloat const * s_row = sim_space + y * sim_ld + XB; // space row + x_start
                     cfloat const * m_row = mask_space + (y - mask_y_off2) * mask_ld; // mask row
@@ -570,7 +577,7 @@ float simulator::getFilling(cint at_x, cint at_y, const vector<vectorized_matrix
                 }
             }
         }
-        else if ((YB >= 0) && (YE < rules.get_space_height()))
+        else if ((YB >= 0) && (YE < m_rules.get_space_height()))
         {
             // special case 4. Access of right border. Tested
             for (int y = YB; y < YE; ++y)
@@ -579,19 +586,19 @@ float simulator::getFilling(cint at_x, cint at_y, const vector<vectorized_matrix
                 cfloat const * m_row = mask_space + (y - YB) * mask_ld; // mask row
                 assert(!(long(s_row) % ALIGNMENT || long(m_row) % ALIGNMENT));
 #pragma omp simd aligned(s_row, m_row:64) reduction(+:f)
-                for (int x = 0; x < rules.get_space_width() - XB; ++x)
+                for (int x = 0; x < m_rules.get_space_width() - XB; ++x)
                     f += s_row[x] * m_row[x];
             }
 
 
-            cint mask_x_off = rules.get_space_width() - XB;
+            cint mask_x_off = m_rules.get_space_width() - XB;
             for (int y = YB; y < YE; ++y)
             {
                 cfloat const * s_row = sim_space + y*sim_ld;
                 cfloat const * m_row = mask_space + mask_x_off + (y - YB) * mask_ld; // mask row
                 assert(!(long(s_row) % ALIGNMENT || long(m_row) % ALIGNMENT));
 #pragma omp simd aligned(s_row, m_row:64) reduction(+:f)
-                for (int x = 0; x < XE - rules.get_space_width(); ++x)
+                for (int x = 0; x < XE - m_rules.get_space_width(); ++x)
                     f += s_row[x] * m_row[x];
             }
         }
@@ -607,7 +614,7 @@ float simulator::getFilling(cint at_x, cint at_y, const vector<vectorized_matrix
             }
         }
     }
-    else if ((YB >= 0) && (YE < rules.get_space_height()))
+    else if ((YB >= 0) && (YE < m_rules.get_space_height()))
     {
         // special case 3. Access over left border. Tested
         cint mask_x_off = -XB;
@@ -625,12 +632,12 @@ float simulator::getFilling(cint at_x, cint at_y, const vector<vectorized_matrix
         // wrapped part. we are on the right now
         for (int y = YB; y < YE; ++y)
         {
-            cfloat const * s_row = sim_space + y * sim_ld + rules.get_space_width() + XB;
+            cfloat const * s_row = sim_space + y * sim_ld + m_rules.get_space_width() + XB;
             cfloat const * m_row = mask_space + (y - YB) * mask_ld; // mask row
             assert(!(long(s_row) % ALIGNMENT || long(m_row) % ALIGNMENT));
 #pragma omp simd aligned(s_row, m_row:64) reduction(+:f)
             for (int x = 0; x < -XB; ++x)
-                //f += sim_space[x + y*sim_ld + rules.get_space_width() + XB] * mask_space[x + (y - YB) * mask_ld];
+                //f += sim_space[x + y*sim_ld + m_rules.get_space_width() + XB] * mask_space[x + (y - YB) * mask_ld];
                 f += s_row[x] * m_row[x];
         }
     }
@@ -650,10 +657,10 @@ float simulator::getFilling(cint at_x, cint at_y, const vector<vectorized_matrix
     return f / mask_sum; // normalize f
 }
 
-float simulator::getFilling_peeled(cint at_x, cint at_y, const vector<vectorized_matrix<float>> &masks, cint offset, cfloat mask_sum)
+float simulator::getFilling_peeled(cint at_x, cint at_y, const vector<aligned_matrix<float>> &masks, cint offset, cfloat mask_sum)
 {
     assert(offset >= 0);
-    vectorized_matrix<float> const &mask = masks[offset];
+    aligned_matrix<float> const &mask = masks[offset];
 
     // These define the rect inside the grid being accessed by mask
     cint XB = at_x - floor(mask.getNumCols() / 2); // aka x_begin
@@ -673,12 +680,12 @@ float simulator::getFilling_peeled(cint at_x, cint at_y, const vector<vectorized
     float f = 0;
     if (XB >= 0)
     {
-        if (XE < rules.get_space_width())
+        if (XE < m_rules.get_space_width())
         {
             // NOTE: x accessible without wrapping
             if (YB >= 0)
             {
-                if (YE < rules.get_space_height())
+                if (YE < m_rules.get_space_height())
                 {
                     // ideal case. no wrapping
                     for (int y = YB; y < YE; ++y)
@@ -695,7 +702,7 @@ float simulator::getFilling_peeled(cint at_x, cint at_y, const vector<vectorized
                 {
 
                     // special case 2. Ideally vectorized. Access over bottom border
-                    for (int y = YB; y < rules.get_space_height(); ++y)
+                    for (int y = YB; y < m_rules.get_space_height(); ++y)
                     {
                         cint Y = y*sim_ld;
                         cint YB_ = offset + (y - YB) * mask_ld - XB;
@@ -706,10 +713,10 @@ float simulator::getFilling_peeled(cint at_x, cint at_y, const vector<vectorized
                     }
 
                     // optimized, wrapped access over the top border.
-                    for (int y = 0; y < YE - rules.get_space_height(); ++y)
+                    for (int y = 0; y < YE - m_rules.get_space_height(); ++y)
                     {
                         cint Y = y*sim_ld;
-                        cint mask_y_off = mask.getNumRows() - (YE - rules.get_space_height());
+                        cint mask_y_off = mask.getNumRows() - (YE - m_rules.get_space_height());
                         cint YB_ = offset + (mask_y_off + y) * mask_ld - XB;
                         __assume_aligned(sim_space, 64);
                         __assume_aligned(mask_space, 64);
@@ -732,10 +739,10 @@ float simulator::getFilling_peeled(cint at_x, cint at_y, const vector<vectorized
                 }
 
                 // optimized, wrapped access over the bottom border.
-                for (int y = rules.get_space_height() + YB; y < rules.get_space_height(); ++y)
+                for (int y = m_rules.get_space_height() + YB; y < m_rules.get_space_height(); ++y)
                 {
                     cint Y = y*sim_ld;
-                    cint mask_y_off = rules.get_space_height() + YB;
+                    cint mask_y_off = m_rules.get_space_height() + YB;
                     cint YB_ = offset + (y - mask_y_off) * mask_ld - XB;
                     __assume_aligned(sim_space, 64);
                     __assume_aligned(mask_space, 64);
@@ -744,7 +751,7 @@ float simulator::getFilling_peeled(cint at_x, cint at_y, const vector<vectorized
                 }
             }
         }
-        else if ((YB >= 0) && (YE < rules.get_space_height()))
+        else if ((YB >= 0) && (YE < m_rules.get_space_height()))
         {
             // special case 4. Access of right border
             for (int y = YB; y < YE; ++y)
@@ -753,11 +760,11 @@ float simulator::getFilling_peeled(cint at_x, cint at_y, const vector<vectorized
                 cint YB_ = offset + (y - YB) * mask_ld - XB;
                 __assume_aligned(sim_space, 64);
                 __assume_aligned(mask_space, 64);
-                for (int x = XB; x < rules.get_space_width(); ++x)
+                for (int x = XB; x < m_rules.get_space_width(); ++x)
                     f += sim_space[x + Y] * mask_space[x + YB_];
             }
 
-            cint mask_x_off = rules.get_space_width() - XB + 1; // should be +1
+            cint mask_x_off = m_rules.get_space_width() - XB + 1; // should be +1
             // semi-optimized, wrapped access over the right border
             for (int y = YB; y < YE; ++y)
             {
@@ -765,7 +772,7 @@ float simulator::getFilling_peeled(cint at_x, cint at_y, const vector<vectorized
                 cint YB_ = offset + mask_x_off + (y - YB) * mask_ld;
                 __assume_aligned(sim_space, 64);
                 __assume_aligned(mask_space, 64);
-                for (int x = 0; x < (XE - rules.get_space_width()); ++x)
+                for (int x = 0; x < (XE - m_rules.get_space_width()); ++x)
                     f += sim_space[x + Y] * mask_space[x + YB_];
             }
         }
@@ -781,7 +788,7 @@ float simulator::getFilling_peeled(cint at_x, cint at_y, const vector<vectorized
             }
         }
     }
-    else if ((YB >= 0) && (YE < rules.get_space_height()))
+    else if ((YB >= 0) && (YE < m_rules.get_space_height()))
     {
         // special case 3. Access over left border
         for (int y = YB; y < YE; ++y)
@@ -799,11 +806,11 @@ float simulator::getFilling_peeled(cint at_x, cint at_y, const vector<vectorized
         for (int y = YB; y < YE; ++y)
         {
             cint Y = y*sim_ld;
-            cint XB_ = rules.get_space_width() + XB;
+            cint XB_ = m_rules.get_space_width() + XB;
             cint YB_ = offset + (y - YB) * mask_ld - XB_;
             __assume_aligned(sim_space, 64);
             __assume_aligned(mask_space, 64);
-            for (int x = rules.get_space_width() + XB; x < rules.get_space_width(); ++x)
+            for (int x = m_rules.get_space_width() + XB; x < m_rules.get_space_width(); ++x)
                 f += sim_space[x + Y] * mask_space[x + YB_];
             //f += space_current->getValue(x, y) * mask.getValue(x - XB_, y - YB);
         }
@@ -824,7 +831,7 @@ float simulator::getFilling_peeled(cint at_x, cint at_y, const vector<vectorized
     return f / mask_sum; // normalize f
 }
 
-float simulator::getFilling_unoptimized(cint at_x, cint at_y, const vectorized_matrix<float> &mask, cfloat mask_sum)
+float simulator::getFilling_unoptimized(cint at_x, cint at_y, const aligned_matrix<float> &mask, cfloat mask_sum)
 {
     // The theorectically considered bondaries
     cint XB = at_x - mask.getNumCols() / 2; // aka x_begin ; Ld can be greater, than #cols!
@@ -834,7 +841,7 @@ float simulator::getFilling_unoptimized(cint at_x, cint at_y, const vectorized_m
 
     float f = 0;
 
-    if (XB >= 0 && YB >= 0 && XE < rules.get_space_width() && YE < rules.get_space_height())
+    if (XB >= 0 && YB >= 0 && XE < m_rules.get_space_width() && YE < m_rules.get_space_height())
     {
         for (int y = YB; y < YE; ++y)
         {

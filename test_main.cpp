@@ -6,10 +6,19 @@
 #include "matrix_buffer_queue.h"
 #include "simulator.h"
 
+/**
+ * returns true, if |a-b| < deviation is true
+ */
+inline bool isApprox(cfloat a, cfloat b, cfloat deviation)
+{
+    return abs(a - b) < deviation;
+}
+
+
 /* test by ruman*/
 TEST_CASE("Test correct alignment of matrix class", "[matrix][cache]")
 {
-    vectorized_matrix<float> matrix = vectorized_matrix<float>(10, 12);
+    aligned_matrix<float> matrix = aligned_matrix<float>(10, 12);
 
     for (int row = 0; row < matrix.getNumRows(); ++row)
     {
@@ -18,6 +27,7 @@ TEST_CASE("Test correct alignment of matrix class", "[matrix][cache]")
     }
 }
 
+/* Test by Bastian */
 SCENARIO("The area of all offset masks should be the same", "[masks]") {
     // TODO: use approx function
     GIVEN("A valid simulator with initiated masks")
@@ -25,7 +35,7 @@ SCENARIO("The area of all offset masks should be the same", "[masks]") {
         ruleset rules = ruleset_smooth_life_l(400, 400);
 
         simulator sim = simulator(rules);
-        sim.optimize = false;
+        sim.m_optimize = false;
         sim.initialize(); // initializes masks as well
         
         WHEN("Masks are initialized") {
@@ -34,8 +44,8 @@ SCENARIO("The area of all offset masks should be the same", "[masks]") {
             float sum_outer = sim.get_sum_of_mask(false, 0);
             
             for (int i=1; i<sim.get_num_of_masks(); ++i) {
-                REQUIRE(sum_inner == sim.get_sum_of_mask(true, i));
-                REQUIRE(sum_outer == sim.get_sum_of_mask(false, i));
+                REQUIRE(isApprox(sum_inner, sim.get_sum_of_mask(true, i), 5.0e-5));
+                REQUIRE(isApprox(sum_outer, sim.get_sum_of_mask(false, i), 5.0e-5));
             }
         }
     }
@@ -44,7 +54,7 @@ SCENARIO("The area of all offset masks should be the same", "[masks]") {
 /* test by bastian */
 SCENARIO("Test pointer and wrapper correctness of matrix class", "[matrix][cache]")
 {
-    vectorized_matrix<float> matrix = vectorized_matrix<float>(10, 12);
+    aligned_matrix<float> matrix = aligned_matrix<float>(10, 12);
     const float * data_row = matrix.getValues();
     
     WHEN("Pointers initialized")
@@ -77,7 +87,7 @@ SCENARIO("Test correct behaviour of matrix_buffer_queue", "[matrix][queue]")
 
     GIVEN("a 100x100 matrix buffer queue with 10 queue size and initial matrix consisting only of 0")
     {
-        matrix_buffer_queue<float> queue(10, vectorized_matrix<float>(100, 100));
+        matrix_buffer_queue<float> queue(10, aligned_matrix<float>(100, 100));
 
         WHEN("Checking the queue size")
         {
@@ -92,7 +102,7 @@ SCENARIO("Test correct behaviour of matrix_buffer_queue", "[matrix][queue]")
         {
             for (int i = 1; i <= 5; ++i)
             {
-                vectorized_matrix<float> * write_matrix = queue.buffer_write_ptr();
+                aligned_matrix<float> * write_matrix = queue.buffer_write_ptr();
 
                 for (int y = 0; y < write_matrix->getNumRows(); ++y)
                 {
@@ -113,7 +123,7 @@ SCENARIO("Test correct behaviour of matrix_buffer_queue", "[matrix][queue]")
                 REQUIRE(queue.size() == 6);
             }
 
-            vectorized_matrix<float> first_in_queue = vectorized_matrix<float>(100, 100);
+            aligned_matrix<float> first_in_queue = aligned_matrix<float>(100, 100);
 
             WHEN("Removing the first item")
             {
@@ -155,7 +165,7 @@ SCENARIO("Test optimized simulation: Initialize at center", "[simulator]")
     GIVEN("a 400x300 state space with state '1' at the center")
     {
         // Initialize our space
-        vectorized_matrix<float> space = vectorized_matrix<float>(400, 300);
+        aligned_matrix<float> space = aligned_matrix<float>(400, 300);
 
         for (int column = 100; column < 300; ++column)
         {
@@ -170,11 +180,11 @@ SCENARIO("Test optimized simulation: Initialize at center", "[simulator]")
             ruleset rules = ruleset_smooth_life_l(space.getNumCols(), space.getNumRows());
 
             simulator unoptimized_simulator = simulator(rules);
-            unoptimized_simulator.optimize = false;
+            unoptimized_simulator.m_optimize = false;
             unoptimized_simulator.initialize(space);
 
             simulator optimized_simulator = simulator(rules);
-            optimized_simulator.optimize = true;
+            optimized_simulator.m_optimize = true;
             optimized_simulator.initialize(space);
 
             WHEN("both simulators are simulated 10 steps")
@@ -187,8 +197,8 @@ SCENARIO("Test optimized simulation: Initialize at center", "[simulator]")
 
                 THEN("both simulators calculated the same state")
                 {
-                    vectorized_matrix<float> space_unoptimized = unoptimized_simulator.get_current_space();
-                    vectorized_matrix<float> space_optimized = optimized_simulator.get_current_space();
+                    aligned_matrix<float> space_unoptimized = unoptimized_simulator.get_current_space();
+                    aligned_matrix<float> space_optimized = optimized_simulator.get_current_space();
 
                     for (int column = 0; column < space.getNumCols(); ++column)
                     {
@@ -197,7 +207,7 @@ SCENARIO("Test optimized simulation: Initialize at center", "[simulator]")
                             float unoptimized_value = space_unoptimized.getValue(column, row);
                             float optimized_value = space_optimized.getValue(column, row);
 
-                            REQUIRE(unoptimized_value == optimized_value);
+                            REQUIRE(isApprox(unoptimized_value, optimized_value, 0.5e-5));
                         }
                     }
                 }
@@ -214,7 +224,7 @@ SCENARIO("Test optimized simulation: Initialize at left/right border with short 
 
     GIVEN("a 400x300 state space with state '1' at the left & right border")
     {
-        vectorized_matrix<float> space = vectorized_matrix<float>(400, 300);
+        aligned_matrix<float> space = aligned_matrix<float>(400, 300);
 
         for (int column = -100; column < 100; ++column)
         {
@@ -229,11 +239,11 @@ SCENARIO("Test optimized simulation: Initialize at left/right border with short 
             ruleset rules = ruleset_smooth_life_l(space.getNumCols(), space.getNumRows());
 
             simulator unoptimized_simulator = simulator(rules);
-            unoptimized_simulator.optimize = false;
+            unoptimized_simulator.m_optimize = false;
             unoptimized_simulator.initialize(space);
 
             simulator optimized_simulator = simulator(rules);
-            optimized_simulator.optimize = true;
+            optimized_simulator.m_optimize = true;
             optimized_simulator.initialize(space);
 
             WHEN("both simulators are simulated 10 steps")
@@ -246,8 +256,8 @@ SCENARIO("Test optimized simulation: Initialize at left/right border with short 
 
                 THEN("both simulators calculated the same state")
                 {
-                    vectorized_matrix<float> space_unoptimized = unoptimized_simulator.get_current_space();
-                    vectorized_matrix<float> space_optimized = optimized_simulator.get_current_space();
+                    aligned_matrix<float> space_unoptimized = unoptimized_simulator.get_current_space();
+                    aligned_matrix<float> space_optimized = optimized_simulator.get_current_space();
 
                     for (int column = 0; column < space.getNumCols(); ++column)
                     {
@@ -256,7 +266,7 @@ SCENARIO("Test optimized simulation: Initialize at left/right border with short 
                             float unoptimized_value = space_unoptimized.getValue(column, row);
                             float optimized_value = space_optimized.getValue(column, row);
 
-                            REQUIRE(unoptimized_value == optimized_value);
+                            REQUIRE(isApprox(unoptimized_value, optimized_value, 0.5e-5));
                         }
                     }
                 }
@@ -271,7 +281,7 @@ SCENARIO("Test optimized simulation: Initialize at top/bottom border with short 
 {
     GIVEN("a 400x300 state space with state '1' at the top & bottom border")
     {
-        vectorized_matrix<float> space = vectorized_matrix<float>(400, 300);
+        aligned_matrix<float> space = aligned_matrix<float>(400, 300);
 
         for (int column = 0; column < 400; ++column)
         {
@@ -286,11 +296,11 @@ SCENARIO("Test optimized simulation: Initialize at top/bottom border with short 
             ruleset rules = ruleset_smooth_life_l(space.getNumCols(), space.getNumRows());
 
             simulator unoptimized_simulator = simulator(rules);
-            unoptimized_simulator.optimize = false;
+            unoptimized_simulator.m_optimize = false;
             unoptimized_simulator.initialize(space);
 
             simulator optimized_simulator = simulator(rules);
-            optimized_simulator.optimize = true;
+            optimized_simulator.m_optimize = true;
             optimized_simulator.initialize(space);
 
             WHEN("both simulators are simulated 10 steps")
@@ -303,8 +313,8 @@ SCENARIO("Test optimized simulation: Initialize at top/bottom border with short 
 
                 THEN("both simulators calculated the same state")
                 {
-                    vectorized_matrix<float> space_unoptimized = unoptimized_simulator.get_current_space();
-                    vectorized_matrix<float> space_optimized = optimized_simulator.get_current_space();
+                    aligned_matrix<float> space_unoptimized = unoptimized_simulator.get_current_space();
+                    aligned_matrix<float> space_optimized = optimized_simulator.get_current_space();
 
                     for (int column = 0; column < space.getNumCols(); ++column)
                     {
@@ -313,7 +323,7 @@ SCENARIO("Test optimized simulation: Initialize at top/bottom border with short 
                             float unoptimized_value = space_unoptimized.getValue(column, row);
                             float optimized_value = space_optimized.getValue(column, row);
 
-                            REQUIRE(unoptimized_value == optimized_value);
+                            REQUIRE(isApprox(unoptimized_value, optimized_value, 0.5e-5));
                         }
                     }
                 }
@@ -328,7 +338,7 @@ SCENARIO("Test optimized simulation: Initialize at left/right border with long t
 {
     GIVEN("a 400x300 state space with state '1' at the left & right border")
     {
-        vectorized_matrix<float> space = vectorized_matrix<float>(400, 300);
+        aligned_matrix<float> space = aligned_matrix<float>(400, 300);
 
         for (int column = -100; column < 100; ++column)
         {
@@ -343,11 +353,11 @@ SCENARIO("Test optimized simulation: Initialize at left/right border with long t
             ruleset rules = ruleset_smooth_life_l(space.getNumCols(), space.getNumRows());
 
             simulator unoptimized_simulator = simulator(rules);
-            unoptimized_simulator.optimize = false;
+            unoptimized_simulator.m_optimize = false;
             unoptimized_simulator.initialize(space);
 
             simulator optimized_simulator = simulator(rules);
-            optimized_simulator.optimize = true;
+            optimized_simulator.m_optimize = true;
             optimized_simulator.initialize(space);
 
             WHEN("both simulators are simulated 10 steps")
@@ -361,8 +371,8 @@ SCENARIO("Test optimized simulation: Initialize at left/right border with long t
 
                 THEN("both simulators calculated the same state")
                 {
-                    vectorized_matrix<float> space_unoptimized = unoptimized_simulator.get_current_space();
-                    vectorized_matrix<float> space_optimized = optimized_simulator.get_current_space();
+                    aligned_matrix<float> space_unoptimized = unoptimized_simulator.get_current_space();
+                    aligned_matrix<float> space_optimized = optimized_simulator.get_current_space();
                     bool hasValues = false;
                     for (int column = 0; column < space.getNumCols(); ++column)
                     {
@@ -371,7 +381,7 @@ SCENARIO("Test optimized simulation: Initialize at left/right border with long t
                             float unoptimized_value = space_unoptimized.getValue(column, row);
                             float optimized_value = space_optimized.getValue(column, row);
                             hasValues |= unoptimized_value == 0.0 || optimized_value == 0.0;
-                            REQUIRE(unoptimized_value == optimized_value);
+                            REQUIRE(isApprox(unoptimized_value, optimized_value, 0.5e-5));
                         }
                     }
                     

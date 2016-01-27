@@ -31,17 +31,17 @@ protected:
    
 private:
 
-    SDL_Window * window = nullptr;
-    SDL_GLContext gl_context;
+    SDL_Window * m_window = nullptr;
+    SDL_GLContext m_gl_context;
 
-    int sdl_window_w = 800;
-    int sdl_window_h = 600;
+    int m_sdl_window_w = 800;
+    int m_sdl_window_h = 600;
 
 
-    vector<ogl_shader *> shaders;
-    int current_shader = -1;
+    vector<ogl_shader *> m_shaders;
+    int m_current_shader = -1;
 
-    ogl_texture space_texture;
+    ogl_texture m_space_texture;
    
     bool initSDL();
     bool initGL();

@@ -11,10 +11,10 @@ sdl_gui::~sdl_gui()
 
 void sdl_gui::free()
 {
-    if(renderer != nullptr)
-        SDL_DestroyRenderer(renderer);
-    if(window != nullptr)
-        SDL_DestroyWindow(window);
+    if(m_renderer != nullptr)
+        SDL_DestroyRenderer(m_renderer);
+    if(m_window != nullptr)
+        SDL_DestroyWindow(m_window);
 
     SDL_Quit();
 }
@@ -29,9 +29,9 @@ bool sdl_gui::initialize()
 
     // Load the window
 
-    window = SDL_CreateWindow("Smooth Life SDL", 100, 100, 640, 480, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
+    m_window = SDL_CreateWindow("Smooth Life SDL", 100, 100, 640, 480, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
 
-    if (window == nullptr)
+    if (m_window == nullptr)
     {
         print_sdl_error("SDL_CreateWindow Error");
         return false;
@@ -39,9 +39,9 @@ bool sdl_gui::initialize()
 
     // Create the renderer
 
-    renderer = SDL_CreateRenderer(window,-1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC );
+    m_renderer = SDL_CreateRenderer(m_window,-1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC );
 
-    if(renderer == nullptr)
+    if(m_renderer == nullptr)
     {
         print_sdl_error("SDL_CreateRenderer error");
         return false;
@@ -74,13 +74,13 @@ void sdl_gui::update( bool& running, bool & reinitialize )
 
 void sdl_gui::render()
 {
-    SDL_SetRenderDrawColor(renderer, 0,100,200,255);
-    SDL_RenderClear(renderer);
+    SDL_SetRenderDrawColor(m_renderer, 0,100,200,255);
+    SDL_RenderClear(m_renderer);
     
      // How many points are needed?
     int wnd_w;
     int wnd_h;
-    SDL_GetWindowSize ( window, &wnd_w, &wnd_h );
+    SDL_GetWindowSize ( m_window, &wnd_w, &wnd_h );
     float factor = fmax(1, fmin((float)wnd_w / space.getNumCols(), (float)wnd_h / space.getNumRows()));
     
     int render_w = floor(factor * space.getNumCols());
@@ -99,11 +99,11 @@ void sdl_gui::render()
             int x_render = wnd_w / 2 - render_w / 2 + x;
             int y_render = wnd_h / 2 - render_h / 2 + y;
             
-            SDL_SetRenderDrawColor(renderer, a,a,a,255);
-            SDL_RenderDrawPoint(renderer, x_render, y_render);            
+            SDL_SetRenderDrawColor(m_renderer, a,a,a,255);
+            SDL_RenderDrawPoint(m_renderer, x_render, y_render);            
         }
     }
     
-    SDL_RenderPresent(renderer);
+    SDL_RenderPresent(m_renderer);
 }
 

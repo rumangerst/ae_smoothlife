@@ -2,7 +2,7 @@
 
 ogl_shader::ogl_shader(const char * name)
 {
-    this->name = string(name);
+    this->m_name = string(name);
 }
 
 ogl_shader::~ogl_shader()
@@ -12,16 +12,16 @@ ogl_shader::~ogl_shader()
 
 void ogl_shader::free()
 {
-    glDeleteProgram(program_id);
+    glDeleteProgram(m_program_id);
 }
 
 bool ogl_shader::bind()
 {
-    glUseProgram(program_id);
+    glUseProgram(m_program_id);
 
     if(is_gl_error("Binding shader"))
     {
-        print_program_log(program_id);
+        print_program_log(m_program_id);
         return false;
     }
 
@@ -107,7 +107,7 @@ void ogl_shader::print_program_log(GLuint program)
 
 bool ogl_shader::load_program(const char *vertex_shader_code, const char *pixel_shader_code)
 {
-    program_id = glCreateProgram();
+    m_program_id = glCreateProgram();
 
     //Compile vertex shader and check for errors
     GLuint vertex_shader = glCreateShader(GL_VERTEX_SHADER);
@@ -126,7 +126,7 @@ bool ogl_shader::load_program(const char *vertex_shader_code, const char *pixel_
         return false;
     }
 
-    glAttachShader(program_id, vertex_shader);
+    glAttachShader(m_program_id, vertex_shader);
 
     //Compile pixel shader and check for errors
     GLuint pixel_shader = glCreateShader(GL_FRAGMENT_SHADER);
@@ -145,13 +145,13 @@ bool ogl_shader::load_program(const char *vertex_shader_code, const char *pixel_
         return false;
     }
 
-    glAttachShader(program_id, pixel_shader);
+    glAttachShader(m_program_id, pixel_shader);
 
     //Link shader
-    glLinkProgram(program_id);
+    glLinkProgram(m_program_id);
 
     GLint program_linked = GL_FALSE;
-    glGetProgramiv(program_id, GL_LINK_STATUS, &program_linked);
+    glGetProgramiv(m_program_id, GL_LINK_STATUS, &program_linked);
 
     //Cleanup
     glDeleteShader(vertex_shader);
@@ -159,8 +159,8 @@ bool ogl_shader::load_program(const char *vertex_shader_code, const char *pixel_
 
     if(program_linked != GL_TRUE)
     {
-        cout << "Error while linking " << program_id << endl;
-        print_program_log(program_id);
+        cout << "Error while linking " << m_program_id << endl;
+        print_program_log(m_program_id);
 
         return false;
     }
@@ -170,21 +170,21 @@ bool ogl_shader::load_program(const char *vertex_shader_code, const char *pixel_
 
 void ogl_shader::bind_variables()
 {
-    uniform_texture0.bind(program_id);
-    uniform_field_w.bind(program_id);
-    uniform_field_h.bind(program_id);
-    uniform_render_w.bind(program_id);
-    uniform_render_h.bind(program_id);
-    uniform_time.bind(program_id);
+    m_uniform_texture0.bind(m_program_id);
+    m_uniform_field_w.bind(m_program_id);
+    m_uniform_field_h.bind(m_program_id);
+    m_uniform_render_w.bind(m_program_id);
+    m_uniform_render_h.bind(m_program_id);
+    m_uniform_time.bind(m_program_id);
 }
 
 void ogl_shader::unbind_variables()
 {
-    uniform_texture0.unbind();
-    uniform_field_w.unbind();
-    uniform_field_h.unbind();
-    uniform_render_w.unbind();
-    uniform_render_h.unbind();
-    uniform_time.unbind();
+    m_uniform_texture0.unbind();
+    m_uniform_field_w.unbind();
+    m_uniform_field_h.unbind();
+    m_uniform_render_w.unbind();
+    m_uniform_render_h.unbind();
+    m_uniform_time.unbind();
 }
 

@@ -6,7 +6,7 @@ ogl_gui::ogl_gui() : gui()
 
 ogl_gui::~ogl_gui()
 {
-    for (ogl_shader * s : shaders)
+    for (ogl_shader * s : m_shaders)
     {
         delete s;
     }
@@ -53,17 +53,17 @@ bool ogl_gui::initSDL()
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
 
-    window = SDL_CreateWindow("Smooth Life OpenGL", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, sdl_window_w, sdl_window_h, SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
+    m_window = SDL_CreateWindow("Smooth Life OpenGL", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, m_sdl_window_w, m_sdl_window_h, SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
 
-    if (window == nullptr)
+    if (m_window == nullptr)
     {
         print_sdl_error("SDL_CreateWindow");
         return false;
     }
 
-    gl_context = SDL_GL_CreateContext(window);
+    m_gl_context = SDL_GL_CreateContext(m_window);
 
-    if (gl_context == 0)
+    if (m_gl_context == 0)
     {
         print_sdl_error("SDL_GL_CreateContext");
         return false;
@@ -85,7 +85,7 @@ bool ogl_gui::load()
     }
 
     // load texture
-    space_texture.loadFromMatrix(&space);
+    m_space_texture.loadFromMatrix(&space);
 
     return true;
 }
@@ -107,11 +107,11 @@ bool ogl_gui::initGL()
         return false;
     }
 
-    glViewport(0, 0, sdl_window_w, sdl_window_h);
+    glViewport(0, 0, m_sdl_window_w, m_sdl_window_h);
 
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
-    glOrtho(0, sdl_window_w, sdl_window_h, 0, 1, -1);
+    glOrtho(0, m_sdl_window_w, m_sdl_window_h, 0, 1, -1);
 
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
@@ -137,13 +137,13 @@ void ogl_gui::render()
     //Update OpenGL transformation
     int wnd_w, wnd_h;
 
-    SDL_GetWindowSize(window, &wnd_w, &wnd_h);
+    SDL_GetWindowSize(m_window, &wnd_w, &wnd_h);
 
-    if (wnd_w != sdl_window_w || wnd_h != sdl_window_h)
+    if (wnd_w != m_sdl_window_w || wnd_h != m_sdl_window_h)
     {
         //Update OpenGL ortho matrix
-        sdl_window_w = wnd_w;
-        sdl_window_h = wnd_h;
+        m_sdl_window_w = wnd_w;
+        m_sdl_window_h = wnd_h;
 
         initGL();
     }
@@ -153,32 +153,32 @@ void ogl_gui::render()
 
     glLoadIdentity();
 
-    space_texture.loadFromMatrix(&space);
+    m_space_texture.loadFromMatrix(&space);
 
     cdouble w = space.getNumCols();
     cdouble h = space.getNumRows();
-    cdouble scale = fmin(sdl_window_w / w, sdl_window_h / h);
+    cdouble scale = fmin(m_sdl_window_w / w, m_sdl_window_h / h);
     cdouble sw = scale * w;
     cdouble sh = scale * h;
-    cdouble texcoord_w = w / space_texture.get_width();
-    cdouble texcoord_h = h / space_texture.get_height();
+    cdouble texcoord_w = w / m_space_texture.get_width();
+    cdouble texcoord_h = h / m_space_texture.get_height();
 
     //Activate texture
     glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, space_texture.get_texture_id());
+    glBindTexture(GL_TEXTURE_2D, m_space_texture.get_texture_id());
 
     //Tell shader the target size
-    shaders[current_shader]->uniform_render_w.set(sw);
-    shaders[current_shader]->uniform_render_h.set(sh);
+    m_shaders[m_current_shader]->m_uniform_render_w.set(sw);
+    m_shaders[m_current_shader]->m_uniform_render_h.set(sh);
 
     //Tell field size
-    shaders[current_shader]->uniform_field_w.set(w);
-    shaders[current_shader]->uniform_field_h.set(h);
+    m_shaders[m_current_shader]->m_uniform_field_w.set(w);
+    m_shaders[m_current_shader]->m_uniform_field_h.set(h);
 
-    // Tell shader other information
-    shaders[current_shader]->uniform_time.set(SDL_GetTicks());
+    // Tell m_shader other information
+    m_shaders[m_current_shader]->m_uniform_time.set(SDL_GetTicks());
 
-    glTranslatef(sdl_window_w / 2.0 - sw / 2.0, sdl_window_h / 2.0 - sh / 2.0, 0.0);
+    glTranslatef(m_sdl_window_w / 2.0 - sw / 2.0, m_sdl_window_h / 2.0 - sh / 2.0, 0.0);
 
     glBegin(GL_QUADS);
     //glColor3f( 0.f, 1.f, 1.f );
@@ -195,7 +195,7 @@ void ogl_gui::render()
     glEnd();
 
     //Draw OpenGL to SDL window
-    SDL_GL_SwapWindow(window);
+    SDL_GL_SwapWindow(m_window);
 
 }
 
@@ -217,7 +217,7 @@ bool ogl_gui::load_shaders()
             return false;
         }
 
-        shaders.push_back(shader);
+        m_shaders.push_back(shader);
     }
 
     // Load microscope shader
@@ -236,7 +236,7 @@ bool ogl_gui::load_shaders()
             return false;
         }
 
-        shaders.push_back(shader);
+        m_shaders.push_back(shader);
     }
 
     // Load microscope 2 shader
@@ -255,7 +255,7 @@ bool ogl_gui::load_shaders()
             return false;
         }
 
-        shaders.push_back(shader);
+        m_shaders.push_back(shader);
     }
 
     // Load blue shader
@@ -274,7 +274,7 @@ bool ogl_gui::load_shaders()
             return false;
         }
 
-        shaders.push_back(shader);
+        m_shaders.push_back(shader);
     }
 
     switch_shader();
@@ -284,25 +284,25 @@ bool ogl_gui::load_shaders()
 
 void ogl_gui::switch_shader(int shader_index)
 {
-    cout << "Switching to shader id" << shader_index << " (" << shaders[shader_index]->name << ")" << endl;
+    cout << "Switching to shader id" << shader_index << " (" << m_shaders[shader_index]->m_name << ")" << endl;
 
-    if (shader_index != current_shader)
+    if (shader_index != m_current_shader)
     {
-        if (current_shader != -1)
+        if (m_current_shader != -1)
         {
-            shaders[current_shader]->unbind();
+            m_shaders[m_current_shader]->unbind();
         }
 
-        current_shader = shader_index;
+        m_current_shader = shader_index;
 
-        shaders[current_shader]->bind();
-        shaders[current_shader]->uniform_texture0.set(0);
+        m_shaders[m_current_shader]->bind();
+        m_shaders[m_current_shader]->m_uniform_texture0.set(0);
 
     }
 }
 
 void ogl_gui::switch_shader()
 {
-    switch_shader((current_shader + 1) % shaders.size());
+    switch_shader((m_current_shader + 1) % m_shaders.size());
 }
 
