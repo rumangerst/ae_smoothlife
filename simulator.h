@@ -148,7 +148,7 @@ private:
      */
     int get_mpi_chunk_border_width()
     {
-        return matrix_calc_ld_with_padding(sizeof(float), m_rules.get_ra() + 1, CACHELINE_SIZE);
+        return matrix_calc_ld_with_padding(sizeof(float), m_rules.get_radius_outer() + 1, CACHELINE_SIZE);
     }
     
     /**
@@ -214,8 +214,8 @@ private:
 
         float mx, my;
 
-        mx = 2*m_rules.get_ra(); if (mx>m_rules.get_space_width()) mx=m_rules.get_space_width();
-        my = 2*m_rules.get_ra(); if (my>m_rules.get_space_height()) my=m_rules.get_space_height();
+        mx = 2*m_rules.get_radius_outer(); if (mx>m_rules.get_space_width()) mx=m_rules.get_space_width();
+        my = 2*m_rules.get_radius_outer(); if (my>m_rules.get_space_height()) my=m_rules.get_space_height();
 
         for(int t=0; t<=(int)(m_rules.get_space_width()*m_rules.get_space_height()/(mx*my)); ++t)
         {
@@ -224,7 +224,7 @@ private:
 
             mx = random_point_x(re);
             my = random_point_y(re);
-            u = m_rules.get_ra()*(random_idk(re) + 0.5);
+            u = m_rules.get_radius_outer()*(random_idk(re) + 0.5);
 
             for (iy=(int)(my-u-1); iy<=(int)(my+u+1); ++iy)
                 for (ix=(int)(mx-u-1); ix<=(int)(mx+u+1); ++ix)
@@ -328,7 +328,7 @@ private:
     inline float discrete_state_func_1(cfloat outer, cfloat inner)
     {
         //According to ref. implementation
-        return sigmam(sigma2(outer,m_rules.get_b1(),m_rules.get_b2()),sigma2(outer,m_rules.get_d1(),m_rules.get_d2()),inner);
+        return sigmam(sigma2(outer,m_rules.get_birth_min(),m_rules.get_birth_max()),sigma2(outer,m_rules.get_death_min(),m_rules.get_death_max()),inner);
     }
 
     inline float discrete_as_euler(cfloat outer, cfloat inner)
@@ -338,7 +338,7 @@ private:
 
     inline float next_step_as_euler(cint x, cint y, cfloat outer, cfloat inner)
     {
-        return space_current->getValue(x,y) + m_rules.get_dt() * discrete_as_euler(outer,inner);
+        return space_current->getValue(x,y) + m_rules.get_delta_time() * discrete_as_euler(outer,inner);
     }
 
     /**

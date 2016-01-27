@@ -93,16 +93,16 @@ void simulator::initiate_masks()
      */
     for (int o = 0; o < CACHELINE_FLOATS; ++o)
     {
-        aligned_matrix<float> inner_mask = aligned_matrix<float>(m_rules.get_ra() * 2 + 2, m_rules.get_ra() * 2 + 2, o);
-        inner_mask.set_circle(m_rules.get_ri(), 1, 1, o);
+        aligned_matrix<float> inner_mask = aligned_matrix<float>(m_rules.get_radius_outer() * 2 + 2, m_rules.get_radius_outer() * 2 + 2, o);
+        inner_mask.set_circle(m_rules.get_radius_inner(), 1, 1, o);
         m_inner_masks.push_back(inner_mask);
         //m_outer_masks[o].print_to_console();
         //cout << endl;
 
         // change that back later to get_ri()
-        aligned_matrix<float> outer_mask = aligned_matrix<float>(m_rules.get_ra() * 2 + 2, m_rules.get_ra() * 2 + 2, o);
-        outer_mask.set_circle(m_rules.get_ra(), 1, 1, o);
-        outer_mask.set_circle(m_rules.get_ri(), 0, 1, o);
+        aligned_matrix<float> outer_mask = aligned_matrix<float>(m_rules.get_radius_outer() * 2 + 2, m_rules.get_radius_outer() * 2 + 2, o);
+        outer_mask.set_circle(m_rules.get_radius_outer(), 1, 1, o);
+        outer_mask.set_circle(m_rules.get_radius_inner(), 0, 1, o);
         m_outer_masks.push_back(outer_mask);
         assert(m_inner_masks[0].getLd() == m_outer_masks[0].getLd());
         assert(m_inner_masks[0].getLeftOffset() == m_outer_masks[0].getLeftOffset());
