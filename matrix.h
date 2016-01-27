@@ -88,32 +88,30 @@ public:
     /**
      * @brief creates an empty matrix
      */
-    aligned_matrix()
-    {
-        m_rows = 0;
-        m_columns = 0;
-        m_ld = 0;
-        m_offset = 0;
-        m_leftOffset = 0;
-        m_rightOffset = 0;
-    }
+    aligned_matrix() :
+        m_rows(0),
+        m_columns(0),
+        m_ld(0),
+        m_offset(0),
+        m_leftOffset(0),
+        m_rightOffset(0)
+    { }
 
     /**
      * @brief standard constructor
      * @param columns number of elements per column
      * @param rows number of rows
      */
-    aligned_matrix(cint columns, cint rows) 
+    aligned_matrix(cint columns, cint rows) :
+        m_ld(matrix_calc_ld_with_padding(sizeof (T), columns, CACHELINE_SIZE)),
+        m_Mat(aligned_vector<T>(matrix_calc_ld_with_padding(sizeof (T), columns, CACHELINE_SIZE) * rows)),
+        m_rows(rows),
+        m_columns(columns),
+        m_offset(0),
+        m_leftOffset(ceil(columns / 2)),
+        m_rightOffset(matrix_calc_ld_with_padding(sizeof (T), columns, CACHELINE_SIZE) - m_leftOffset)
     {
-        cint ld = matrix_calc_ld_with_padding(sizeof (T), columns, CACHELINE_SIZE);
-        assert((ld * sizeof (T)) % CACHELINE_SIZE == 0);
-        this->m_Mat = aligned_vector<T>(ld * rows);
-        this->m_rows = rows;
-        this->m_columns = columns;
-        this->m_ld = ld;
-        this->m_offset = 0;
-        this->m_leftOffset = ceil(columns / 2);
-        this->m_rightOffset = ld - m_leftOffset;
+        assert((m_ld * sizeof (T)) % CACHELINE_SIZE == 0);
     }
 
     /**
@@ -124,8 +122,16 @@ public:
      * @param offset
      * @author Bastian
      */
-    aligned_matrix(cint columns, cint rows, cint offset)
+    aligned_matrix(cint columns, cint rows, cint offset) :
+        m_ld(CACHELINE_FLOATS * ceil(float(offset + columns) / CACHELINE_FLOATS)),
+        m_Mat(aligned_vector<T>(CACHELINE_FLOATS * ceil(float(offset + columns) / CACHELINE_FLOATS) * rows)),
+        m_columns(columns),
+        m_rows(rows),
+        m_offset(offset),
+        m_leftOffset(ceil(columns / 2) + offset),
+        m_rightOffset(CACHELINE_FLOATS * ceil(float(offset + columns) / CACHELINE_FLOATS) - m_leftOffset)
     {
+        /*
         assert(rows > 0 && columns > 0 && offset >= 0 && offset <= CACHELINE_FLOATS);
         this->m_ld = CACHELINE_FLOATS * ceil(float(offset + columns) / CACHELINE_FLOATS);
         assert(m_ld * sizeof (T) % CACHELINE_SIZE == 0);
@@ -137,14 +143,23 @@ public:
         this->m_leftOffset = ceil(columns / 2) + offset; // will be +1 of the last, accessible index!
         this->m_rightOffset = m_ld - m_leftOffset;
         assert(m_leftOffset + m_rightOffset == m_ld);
+         */
     }
 
     /**
      * @brief creates a deep copy of the given matrix
      * @param copy
      */
-    aligned_matrix(const aligned_matrix<T> & copy)
+    aligned_matrix(const aligned_matrix<T> & copy) :
+        m_Mat(aligned_vector<T>(copy.m_Mat)),
+        m_rows(copy.m_rows),
+        m_columns(copy.m_rows),
+        m_ld(copy.m_ld),
+        m_offset(copy.m_offset),
+        m_leftOffset(copy.m_leftOffset),
+        m_rightOffset(copy.m_rightOffset)
     {
+        /*
         m_Mat = aligned_vector<T>(copy.m_Mat);
         m_rows = copy.m_rows;
         m_columns = copy.m_columns;
@@ -152,6 +167,7 @@ public:
         m_offset = copy.m_offset;
         m_leftOffset = copy.m_leftOffset;
         m_rightOffset = copy.m_rightOffset;
+         */
     }
 
     // Getter and Setter methods
