@@ -189,7 +189,7 @@ SCENARIO("Test optimized simulation: Initialize at center", "[simulator]")
 
             simulator optimized_simulator = simulator(rules);
             optimized_simulator.m_optimize = true;
-            optimized_simulator.initialize(space);
+            optimized_simulator.initialize(*(new aligned_matrix<float>(space)));
 
             WHEN("both simulators are simulated 10 steps")
             {
@@ -228,29 +228,27 @@ SCENARIO("Test optimized simulation: Initialize at left/right border with short 
 
     GIVEN("a 400x300 state space with state '1' at the left & right border")
     {
-        aligned_matrix<float> space1 = aligned_matrix<float>(400, 300);
-        aligned_matrix<float> space2 = aligned_matrix<float>(400, 300);
+        aligned_matrix<float> space = aligned_matrix<float>(400, 300);
 
         for (int column = -100; column < 100; ++column)
         {
             for (int row = 0; row < 300; ++row)
             {
-                space1.setValueWrapped(1, column, row);
-                space2.setValueWrapped(1, column, row);
+                space.setValueWrapped(1, column, row);
             }
         }
 
         GIVEN("one unoptimized and an optimized simulator")
         {
-            ruleset rules = ruleset_smooth_life_l(space1.getNumCols(), space1.getNumRows());
+            ruleset rules = ruleset_smooth_life_l(space.getNumCols(), space.getNumRows());
 
             simulator unoptimized_simulator = simulator(rules);
             unoptimized_simulator.m_optimize = false;
-            unoptimized_simulator.initialize(space1);
+            unoptimized_simulator.initialize(space);
 
             simulator optimized_simulator = simulator(rules);
             optimized_simulator.m_optimize = true;
-            optimized_simulator.initialize(space2);
+            optimized_simulator.initialize(*(new aligned_matrix<float>(space))); // matrix copy constructor!
 
             WHEN("both simulators are simulated 10 steps")
             {
@@ -265,9 +263,9 @@ SCENARIO("Test optimized simulation: Initialize at left/right border with short 
                     aligned_matrix<float> space_unoptimized = unoptimized_simulator.get_current_space();
                     aligned_matrix<float> space_optimized = optimized_simulator.get_current_space();
 
-                    for (int column = 0; column < space1.getNumCols(); ++column)
+                    for (int column = 0; column < space.getNumCols(); ++column)
                     {
-                        for (int row = 0; row < space1.getNumRows(); ++row)
+                        for (int row = 0; row < space.getNumRows(); ++row)
                         {
                             float unoptimized_value = space_unoptimized.getValue(column, row);
                             float optimized_value = space_optimized.getValue(column, row);
@@ -307,7 +305,7 @@ SCENARIO("Test optimized simulation: Initialize at top/bottom border with short 
 
             simulator optimized_simulator = simulator(rules);
             optimized_simulator.m_optimize = true;
-            optimized_simulator.initialize(space);
+            optimized_simulator.initialize(*(new aligned_matrix<float>(space)));
 
             WHEN("both simulators are simulated 10 steps")
             {
@@ -364,7 +362,7 @@ SCENARIO("Test optimized simulation: Initialize at left/right border with long t
 
             simulator optimized_simulator = simulator(rules);
             optimized_simulator.m_optimize = true;
-            optimized_simulator.initialize(space);
+            optimized_simulator.initialize(*(new aligned_matrix<float>(space)));
 
             WHEN("both simulators are simulated 10 steps")
             {

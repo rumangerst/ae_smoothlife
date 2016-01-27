@@ -131,19 +131,10 @@ public:
         m_leftOffset(ceil(columns / 2) + offset),
         m_rightOffset(CACHELINE_FLOATS * ceil(float(offset + columns) / CACHELINE_FLOATS) - m_leftOffset)
     {
-        /*
         assert(rows > 0 && columns > 0 && offset >= 0 && offset <= CACHELINE_FLOATS);
-        this->m_ld = CACHELINE_FLOATS * ceil(float(offset + columns) / CACHELINE_FLOATS);
         assert(m_ld * sizeof (T) % CACHELINE_SIZE == 0);
-        this->m_Mat = aligned_vector<T>(m_ld * rows);
         assert(long(this->m_Mat.data()) % ALIGNMENT == 0);
-        this->m_columns = columns;
-        this->m_rows = rows; // the actual number of rows potentially containing information
-        this->m_offset = offset;
-        this->m_leftOffset = ceil(columns / 2) + offset; // will be +1 of the last, accessible index!
-        this->m_rightOffset = m_ld - m_leftOffset;
         assert(m_leftOffset + m_rightOffset == m_ld);
-         */
     }
 
     /**
@@ -153,22 +144,12 @@ public:
     aligned_matrix(const aligned_matrix<T> & copy) :
         m_Mat(aligned_vector<T>(copy.m_Mat)),
         m_rows(copy.m_rows),
-        m_columns(copy.m_rows),
+        m_columns(copy.m_columns),
         m_ld(copy.m_ld),
         m_offset(copy.m_offset),
         m_leftOffset(copy.m_leftOffset),
         m_rightOffset(copy.m_rightOffset)
-    {
-        /*
-        m_Mat = aligned_vector<T>(copy.m_Mat);
-        m_rows = copy.m_rows;
-        m_columns = copy.m_columns;
-        m_ld = copy.m_ld;
-        m_offset = copy.m_offset;
-        m_leftOffset = copy.m_leftOffset;
-        m_rightOffset = copy.m_rightOffset;
-         */
-    }
+    {}
 
     // Getter and Setter methods
 
