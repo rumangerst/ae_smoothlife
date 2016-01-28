@@ -648,13 +648,48 @@ float simulator::getFilling(cint at_x, cint at_y, const aligned_matrix<float> &m
             } else {
                 // YE >= FW
                 assert(YE >= m_rules.get_space_height());
-                // hard case. use wrapped version.
-                for (int y = YB; y < YE; ++y)
+                // hard case. bottom right
+                cint mask_y_off = YB;
+                for (int y = YB; y < m_rules.get_space_height(); ++y)
                 {
-                    cint Y = y;
-                    cint YB_ = (y - YB) * mask_ld - XB;
-                    for (int x = XB; x < XE; ++x)
-                        f += space_current->getValueWrapped(x, y) * mask_space[x + YB_];
+                    cfloat const * s_row = sim_space + y * sim_ld + XB; // space row + x_start
+                    cfloat const * m_row = mask_space + (y - mask_y_off) * mask_ld; // mask row
+                    assert(!(long(s_row) % ALIGNMENT || long(m_row) % ALIGNMENT));
+                    #pragma omp simd aligned(s_row, m_row:64) reduction(+:f)
+                    for (int x = 0; x < m_rules.get_space_width() - XB; ++x)
+                        f += s_row[x] * m_row[x];
+                }
+                
+                cint mask_y_off2 = m_rules.get_space_height() - YB;
+                for (int y = 0; y < YE - m_rules.get_space_height(); ++y)
+                {
+                    cfloat const * s_row = sim_space + y * sim_ld + XB; // space row + x_start
+                    cfloat const * m_row = mask_space + (y + mask_y_off2) * mask_ld; // mask row
+                    assert(!(long(s_row) % ALIGNMENT || long(m_row) % ALIGNMENT));
+                    #pragma omp simd aligned(s_row, m_row:64) reduction(+:f)
+                    for (int x = 0; x < m_rules.get_space_width() - XB; ++x)
+                        f += s_row[x] * m_row[x];
+                }
+                
+                cint mask_x_off = m_rules.get_space_width() - XB;
+                for (int y = YB; y < m_rules.get_space_height(); ++y)
+                {
+                    cfloat const * s_row = sim_space + y * sim_ld; // space row + x_start
+                    cfloat const * m_row = mask_space + mask_x_off + (y - mask_y_off) * mask_ld; // mask row
+                    assert(!(long(s_row) % ALIGNMENT || long(m_row) % ALIGNMENT));
+                    #pragma omp simd aligned(s_row, m_row:64) reduction(+:f)
+                    for (int x = 0; x < XE - m_rules.get_space_width(); ++x)
+                        f += s_row[x] * m_row[x];
+                }
+                
+                for (int y = 0; y < YE - m_rules.get_space_height(); ++y)
+                {
+                    cfloat const * s_row = sim_space + y * sim_ld; // space row + x_start
+                    cfloat const * m_row = mask_space + mask_x_off + (y + mask_y_off2) * mask_ld; // mask row
+                    assert(!(long(s_row) % ALIGNMENT || long(m_row) % ALIGNMENT));
+                    #pragma omp simd aligned(s_row, m_row:64) reduction(+:f)
+                    for (int x = 0; x < XE - m_rules.get_space_width(); ++x)
+                        f += s_row[x] * m_row[x];
                 }
             }
         }
