@@ -243,7 +243,7 @@ public:
     ruleset_smooth_life_l(int width, int height) : ruleset(width, height)
     {
         printf("Using ruleset: smooth life l\n");
-        set_radius_outer(10);
+        set_radius_outer(21);
         set_radius_ratio(3.0);
         set_birth_min(0.257);
         set_birth_max(0.336);

@@ -133,7 +133,7 @@ void simulator::simulate_step(int x_start, int w)
         // NOTE: this is mostly cache optimized. Each mask is used over an entire y array
         int off = ((x - m_offset_from_mask_center) >= 0) ?
                 (x - m_offset_from_mask_center) % CACHELINE_FLOATS :
-                CACHELINE_FLOATS - ((m_offset_from_mask_center - x) % CACHELINE_FLOATS); // we calc this new inside the function in this case
+                (CACHELINE_FLOATS - (m_offset_from_mask_center - x) % CACHELINE_FLOATS) % CACHELINE_FLOATS; // we calc this new inside the function in this case
         const aligned_matrix<float> const &mask_inner = m_inner_masks[off];
         const aligned_matrix<float> const &mask_outer = m_outer_masks[off];
         for (int y = 0; y < m_rules.get_space_height(); ++y)
@@ -141,9 +141,12 @@ void simulator::simulate_step(int x_start, int w)
             float n;
             float m;
             
-            assert(off >= 0 && off < CACHELINE_FLOATS);
+	    
             if (m_optimize)
             {
+		if (!( off >= 0 && off < CACHELINE_FLOATS ))
+		    cout << "o: " << off << " CF: " << CACHELINE_FLOATS << " x: " << x << " x_off: " << m_offset_from_mask_center << endl;
+		assert(off >= 0 && off < CACHELINE_FLOATS);
                 m = getFilling(x, y, mask_inner, m_inner_mask_sum); // filling of inner circle
                 n = getFilling(x, y, mask_outer, m_outer_mask_sum); // filling of outer ring
             }
