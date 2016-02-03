@@ -439,7 +439,7 @@ void simulator::run_simulation_master()
                 auto perf_time_end = chrono::high_resolution_clock::now();
                 double perf_time_seconds = chrono::duration<double>(perf_time_end - perf_time_start).count();
 
-                cout << "Simulator | " << (spacetime - perf_spacetime_start) / perf_time_seconds << " calculations / s" << endl;
+                cout << "Simulator | " << (spacetime - perf_spacetime_start) / perf_time_seconds << " calculations / s" << " (" << (spacetime - perf_spacetime_start) << " calcs in " << perf_time_seconds << "s)" << endl;
 
                 perf_spacetime_start = spacetime;
                 perf_time_start = chrono::high_resolution_clock::now();
