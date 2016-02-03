@@ -144,9 +144,9 @@ void simulator::simulate_step(int x_start, int w)
 	    
             if (m_optimize)
             {
-		if (!( off >= 0 && off < CACHELINE_FLOATS ))
+		/*if (!( off >= 0 && off < CACHELINE_FLOATS ))
 		    cout << "o: " << off << " CF: " << CACHELINE_FLOATS << " x: " << x << " x_off: " << m_offset_from_mask_center << endl;
-		assert(off >= 0 && off < CACHELINE_FLOATS);
+		assert(off >= 0 && off < CACHELINE_FLOATS);*/
                 m = getFilling(x, y, mask_inner, m_inner_mask_sum); // filling of inner circle
                 n = getFilling(x, y, mask_outer, m_outer_mask_sum); // filling of outer ring
             }
@@ -434,7 +434,7 @@ void simulator::run_simulation_master()
 
         if (ENABLE_PERF_MEASUREMENT)
         {
-            if (spacetime % 100 == 0)
+            if (spacetime % 25 == 0)
             {
                 auto perf_time_end = chrono::high_resolution_clock::now();
                 double perf_time_seconds = chrono::duration<double>(perf_time_end - perf_time_start).count();

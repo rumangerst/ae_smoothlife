@@ -4,6 +4,7 @@
 #include <omp.h>
 #include <memory>
 #include <exception>
+#include <cstdlib>
 #include "communication.h"
 #include "simulator.h"
 
@@ -22,6 +23,22 @@ void setup_openmp()
 {
     // Enable nested threads
     omp_set_nested(1);
+}
+
+void set_optimization(simulator & sim)
+{
+	const char * opt_env = std::getenv("OPTIMIZE");
+	bool optimize = true;
+	
+	if(opt_env)
+	{
+		optimize = std::string(opt_env) == "TRUE";
+	}
+	
+	cout << "--> Simulator optimization: " << (optimize ? "ON" : "OFF") << endl;
+	
+	sim.m_optimize = optimize;
+	
 }
 
 #if APP_GUI
@@ -64,6 +81,7 @@ int run_slave(int argc, char ** argv)
 {
     ruleset rules = ruleset_from_cli(argc, argv);
     simulator s(rules);
+    set_optimization(s);
     s.initialize();
     s.run_simulation_slave();
 
@@ -77,6 +95,7 @@ int run_master_perftest(int argc, char ** argv)
 {
     ruleset rules = ruleset_from_cli(argc, argv);
     simulator s(rules);
+    set_optimization(s);
     s.initialize();
     s.run_simulation_master();
 
