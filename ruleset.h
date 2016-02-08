@@ -2,7 +2,7 @@
 #include <string>
 #include <iostream>
 
-#define RULESET_DEFAULT_SPACE_W 256
+#define RULESET_DEFAULT_SPACE_W 720
 #define RULESET_DEFAULT_SPACE_H 256
 #define RULESET_DEFAULT_t ruleset_smooth_life_l
 
